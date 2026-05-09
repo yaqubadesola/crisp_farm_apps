@@ -1,0 +1,54 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # ── Tests (runs on every PR and push) ─────────────────────────────────
+  test:
+    name: Build & Test Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run tests
+        working-directory: backend
+        run: mvn test --no-transfer-progress
+
+  # ── Staging deploy (push to develop only) ─────────────────────────────
+  deploy-staging:
+    name: Deploy → Staging
+    needs: test
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment: staging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render staging deploy
+        run: curl -fsSX POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+      - name: Confirm
+        run: echo "✅ Staging backend deploy triggered → ${{ vars.BACKEND_URL }}"
+
+  # ── Production deploy (push to main only, requires approval) ──────────
+  deploy-production:
+    name: Deploy → Production
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render production deploy
+        run: curl -fsSX POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+      - name: Confirm
+        run: echo "🚀 Production backend deploy triggered → ${{ vars.BACKEND_URL }}"

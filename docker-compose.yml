@@ -1,0 +1,49 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: farm_db
+    environment:
+      POSTGRES_DB: farm_db
+      POSTGRES_USER: farm_user
+      POSTGRES_PASSWORD: farm_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - farm_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U farm_user -d farm_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: farm_backend
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/farm_db
+      DB_USERNAME: farm_user
+      DB_PASSWORD: farm_pass
+      JWT_SECRET: ${JWT_SECRET:-local-dev-secret-please-change-in-production!!}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: on-failure
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # NEXT_PUBLIC_* vars are embedded at build time — must be passed as build args
+        NEXT_PUBLIC_API_URL: http://localhost:8080/api
+    container_name: farm_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+    depends_on:
+      - backend
+
+volumes:
+  farm_db_data:

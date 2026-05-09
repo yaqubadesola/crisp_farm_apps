@@ -1,0 +1,140 @@
+# ═══════════════════════════════════════════════════════════════════════
+#  CrispFarm — Monorepo .gitignore
+#  Covers: Spring Boot (Maven) · Next.js (Node) · Docker · IDE · OS
+# ═══════════════════════════════════════════════════════════════════════
+
+
+# ── Environment & Secrets ────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+*.secret
+secrets/
+
+
+# ── Backend: Java / Maven / Spring Boot ─────────────────────────────────
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+backend/.mvn/wrapper/MavenWrapperDownloader.java
+!backend/.mvn/wrapper/maven-wrapper.properties
+
+# Compiled class files
+*.class
+
+# Log files
+*.log
+logs/
+
+# Spring Boot packaging
+*.jar
+*.war
+*.ear
+*.nar
+
+# STS / Spring Tool Suite
+backend/.apt_generated
+backend/.classpath
+backend/.factorypath
+backend/.project
+backend/.settings/
+backend/.springBeans
+backend/.sts4-cache/
+
+# JVM crash logs
+hs_err_pid*
+replay_pid*
+
+
+# ── Frontend: Node.js / Next.js ──────────────────────────────────────────
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.turbo/
+
+# Next.js standalone output (Docker build artifact — not source)
+frontend/.next/standalone/
+frontend/.next/static/
+
+# npm / yarn / pnpm
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.pnpm-debug.log*
+frontend/.yarn/cache
+frontend/.yarn/unplugged
+frontend/.yarn/build-state.yml
+frontend/.yarn/install-state.gz
+frontend/.pnp.*
+
+# TypeScript build info
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+
+
+# ── Docker ────────────────────────────────────────────────────────────────
+# Keep Dockerfiles and docker-compose.yml tracked.
+# Ignore local override files.
+docker-compose.override.yml
+docker-compose.local.yml
+
+
+# ── IDE: IntelliJ IDEA ───────────────────────────────────────────────────
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# IDE: VS Code
+.vscode/
+!.vscode/extensions.json
+
+# IDE: Eclipse
+.classpath
+.project
+.settings/
+.factorypath
+bin/
+tmp/
+
+# IDE: NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+
+# ── OS Files ─────────────────────────────────────────────────────────────
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+
+
+# ── Misc ──────────────────────────────────────────────────────────────────
+*.tmp
+*.temp
+*.swp
+*.swo
+.cache/
+coverage/
+.nyc_output/
