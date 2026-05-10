@@ -6,12 +6,15 @@ import { format } from 'date-fns'
 import { X, CreditCard } from 'lucide-react'
 import api from '@/lib/api'
 import { fmt } from '@/lib/utils'
+import { useAuth } from '@/lib/auth'
 import type { ApiResponse, DebtSummary, DebtDto, Payment } from '@/types'
 
 const PAYMENT_METHODS = ['CASH', 'BANK_TRANSFER', 'POS']
 
 export default function DebtsPage() {
   const qc = useQueryClient()
+  const { hasRole } = useAuth()
+  const canPay = hasRole('ADMIN', 'ACCOUNTANT')
   const today = format(new Date(), 'yyyy-MM-dd')
 
   const [selectedDebt, setSelectedDebt] = useState<DebtDto | null>(null)
@@ -100,12 +103,14 @@ export default function DebtsPage() {
                   <td className="px-4 py-3 text-right text-green-700">{fmt(debt.paidAmount)}</td>
                   <td className="px-4 py-3 text-right font-bold text-orange-600">{fmt(debt.balance)}</td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => { setSelectedDebt(debt); setPayAmount(String(debt.balance)) }}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-brand-600 text-white text-xs rounded-lg hover:bg-brand-700"
-                    >
-                      <CreditCard size={12} /> Pay
-                    </button>
+                    {canPay && (
+                      <button
+                        onClick={() => { setSelectedDebt(debt); setPayAmount(String(debt.balance)) }}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-brand-600 text-white text-xs rounded-lg hover:bg-brand-700"
+                      >
+                        <CreditCard size={12} /> Pay
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -114,8 +119,8 @@ export default function DebtsPage() {
         </div>
       )}
 
-      {/* Payment modal */}
-      {selectedDebt && (
+      {/* Payment modal — ADMIN and ACCOUNTANT only */}
+      {selectedDebt && canPay && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
             <div className="flex items-center justify-between">

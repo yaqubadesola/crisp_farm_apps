@@ -20,10 +20,10 @@ type NavItem = {
 
 const nav: NavItem[] = [
   { href: '/dashboard',    label: 'Dashboard',     icon: LayoutDashboard },
-  { href: '/sales/new',    label: 'New Sale',       icon: ShoppingCart,  roles: ['ADMIN', 'SALES_OFFICER'] },
-  { href: '/sales',        label: 'Sales History',  icon: ClipboardList, roles: ['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT'] },
-  { href: '/customers',    label: 'Customers',      icon: Users,         roles: ['ADMIN', 'SALES_OFFICER'] },
-  { href: '/debts',        label: 'Debts',          icon: CreditCard,    roles: ['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT'] },
+  { href: '/sales/new',    label: 'New Sale',       icon: ShoppingCart,  roles: ['ADMIN', 'SALES_OFFICER', 'FARM_MANAGER'] },
+  { href: '/sales',        label: 'Sales History',  icon: ClipboardList, roles: ['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT', 'FARM_MANAGER'] },
+  { href: '/customers',    label: 'Customers',      icon: Users,         roles: ['ADMIN', 'SALES_OFFICER', 'FARM_MANAGER'] },
+  { href: '/debts',        label: 'Debts',          icon: CreditCard,    roles: ['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT', 'FARM_MANAGER'] },
   { href: '/expenses',     label: 'Expenses',       icon: TrendingDown,  roles: ['ADMIN', 'ACCOUNTANT', 'FARM_MANAGER'] },
   { href: '/cycles',       label: 'Farm Cycles',    icon: RefreshCw,     roles: ['ADMIN', 'FARM_MANAGER'] },
   { href: '/inventory',    label: 'Inventory',      icon: Wheat,         roles: ['ADMIN', 'FARM_MANAGER'] },
