@@ -488,7 +488,7 @@ Migrations live in `src/main/resources/db/migration/` and are applied automatica
 
 Default seed data:
 - **Tenant**: CrispFarm (slug: `crispfarm`)
-- **Admin user**: username `crispfarm`, password `crispAdmin@@2026..`
+- **Admin user**: username `crispfarm`, password set via `ADMIN_INITIAL_PASSWORD` env var
 - **Pricing tiers**:
 
 | Tier | NGN/kg |
@@ -1037,6 +1037,4 @@ Spring's Jackson serialiser outputs `BigDecimal` as a JSON string (e.g., `"2000.
 
 ### DataSeeder Password
 
-The default admin password (`crispAdmin@@2026..`) is hardcoded in `DataSeeder.java`. This is intentional for development convenience. In production, either:
-1. Override it via an environment variable read by `DataSeeder`, or
-2. Immediately change the password after first login via the Users page.
+The admin password is set via the `ADMIN_INITIAL_PASSWORD` environment variable, read by `DataSeeder.java` on first startup. It is never hardcoded in source. Set it in your `.env` file locally and in Render environment variables for production. The seeder only runs once — after the first tenant is created it is skipped entirely.
