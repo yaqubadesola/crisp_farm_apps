@@ -22,6 +22,7 @@ export default function CustomersPage() {
   const qc = useQueryClient()
   const { hasRole } = useAuth()
   const isAdmin = hasRole('ADMIN')
+  const canEdit = hasRole('ADMIN', 'SALES_OFFICER')
 
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
@@ -91,6 +92,7 @@ export default function CustomersPage() {
   }
 
   const openEdit = (c: Customer) => {
+    if (!canEdit) return
     setEditing(c); setName(c.name); setPhone(c.phone ?? ''); setEmail(c.email ?? '')
     setAddress(c.address ?? ''); setCustomerType(c.customerType)
     setShowNewType(false); setNewTypeName(''); setNewTypePrice('')
@@ -148,7 +150,9 @@ export default function CustomersPage() {
                     <td className="px-4 py-3 text-gray-600">{c.email ?? '—'}</td>
                     <td className="px-4 py-3 text-gray-500 max-w-xs truncate">{c.address ?? '—'}</td>
                     <td className="px-4 py-3">
-                      <button onClick={() => openEdit(c)} className="text-xs text-brand-600 hover:underline">Edit</button>
+                      {canEdit && (
+                        <button onClick={() => openEdit(c)} className="text-xs text-brand-600 hover:underline">Edit</button>
+                      )}
                     </td>
                   </tr>
                 ))}

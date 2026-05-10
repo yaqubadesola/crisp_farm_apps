@@ -20,19 +20,19 @@ public class PaymentController {
 
     @PostMapping("/payments")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('ADMIN','FARM_MANAGER','ACCOUNTANT')")
+    @PreAuthorize("hasAnyRole('ADMIN','ACCOUNTANT')")
     public ApiResponse<PaymentDto> record(@Valid @RequestBody RecordPaymentRequest req) {
         return ApiResponse.success(paymentService.record(req));
     }
 
     @GetMapping("/sales/{saleId}/payments")
-    @PreAuthorize("hasAnyRole('ADMIN','FARM_MANAGER','ACCOUNTANT')")
+    @PreAuthorize("hasAnyRole('ADMIN','SALES_OFFICER','FARM_MANAGER','ACCOUNTANT')")
     public ApiResponse<List<PaymentDto>> getPaymentsForSale(@PathVariable Long saleId) {
         return ApiResponse.success(paymentService.getPaymentsForSale(saleId));
     }
 
     @GetMapping("/debts")
-    @PreAuthorize("hasAnyRole('ADMIN','FARM_MANAGER','ACCOUNTANT')")
+    @PreAuthorize("hasAnyRole('ADMIN','SALES_OFFICER','FARM_MANAGER','ACCOUNTANT')")
     public ApiResponse<DebtSummaryDto> listDebts() {
         return ApiResponse.success(paymentService.listDebts());
     }
