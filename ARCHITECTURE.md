@@ -29,6 +29,7 @@
 10. [Adding a New Module](#10-adding-a-new-module)
 11. [Environment Variables](#11-environment-variables)
 12. [Known Constraints & Design Decisions](#12-known-constraints--design-decisions)
+13. [CI/CD & Deployment](#13-cicd--deployment)
 
 ---
 
@@ -74,13 +75,14 @@ All three services are containerised and orchestrated with Docker Compose.
 | PostgreSQL | 16 | ACID compliance, excellent JSON/array support for future needs, reliable |
 | Lombok | 1.18.x | Eliminates boilerplate getters/setters/builders — `@SuperBuilder` critical for inheritance |
 | JJWT | 0.12.6 | Lightweight, well-maintained JWT library for stateless auth |
+| Bucket4j | 8.10.1 | In-memory token-bucket rate limiter for login endpoint protection |
 | BCrypt | (Spring) | Industry-standard adaptive password hashing |
 
 ### Frontend
 
 | Technology | Version | Why |
 |---|---|---|
-| Next.js | 15.3.1 | App Router, SSR/SSG, file-based routing, standalone output for Docker |
+| Next.js | 15.5.18 | App Router, SSR/SSG, file-based routing, standalone output for Docker |
 | React | 19 | Concurrent rendering, latest hooks API |
 | TypeScript | 5 | Type safety across entire frontend; catches API contract mismatches at compile time |
 | TanStack Query | v5 | Server-state cache, automatic background refresh, stale-while-revalidate |
@@ -96,7 +98,7 @@ All three services are containerised and orchestrated with Docker Compose.
 |---|---|
 | Docker + Docker Compose | Reproducible local dev; parity with production |
 | Multi-stage Dockerfile (backend) | JDK in build stage, JRE-only in runtime image — smaller final image |
-| Multi-stage Dockerfile (frontend) | `output: 'standalone'` strips dev dependencies from runtime image |
+| Multi-stage Dockerfile (frontend) | `output: 'standalone'` (enabled via `BUILD_STANDALONE=true`) strips dev dependencies from runtime image |
 
 ---
 
@@ -104,13 +106,17 @@ All three services are containerised and orchestrated with Docker Compose.
 
 ```
 farm_management_system/
+├── .github/
+│   └── workflows/
+│       ├── deploy.yml              ← CI/CD: test → staging → production (approval gate)
+│       └── deploy-flyio.yml.example
 ├── backend/
 │   ├── Dockerfile
 │   ├── .dockerignore
 │   ├── pom.xml
 │   └── src/main/
 │       ├── java/com/crispfarm/
-│       │   ├── FarmManagementApplication.java
+│       │   ├── FarmManagementApplication.java  (@EnableScheduling)
 │       │   ├── common/
 │       │   │   ├── base/BaseEntity.java
 │       │   │   ├── dto/
@@ -123,7 +129,8 @@ farm_management_system/
 │       │   ├── config/
 │       │   │   ├── JwtAuthFilter.java
 │       │   │   ├── JwtService.java
-│       │   │   └── SecurityConfig.java
+│       │   │   ├── LoginRateLimiterService.java  ← Bucket4j per-IP rate limiter
+│       │   │   └── SecurityConfig.java           ← CORS from ALLOWED_ORIGINS env var
 │       │   ├── modules/
 │       │   │   ├── auth/
 │       │   │   ├── customer/
@@ -135,30 +142,34 @@ farm_management_system/
 │       │   │   ├── pricing/
 │       │   │   ├── report/
 │       │   │   ├── sales/
+│       │   │   │   └── dto/
+│       │   │   │       ├── CreateSaleRequest.java  (+ pricingTierName override)
+│       │   │   │       ├── UpdateSaleRequest.java  ← admin sale edits
+│       │   │   │       └── SaleDto.java
 │       │   │   ├── tenant/
 │       │   │   └── user/
-│       │   └── seed/DataSeeder.java
+│       │   └── seed/DataSeeder.java  (password from ADMIN_INITIAL_PASSWORD env var)
 │       └── resources/
-│           ├── application.properties
+│           ├── application.yml
 │           └── db/migration/
 │               ├── V1__init_schema.sql
 │               ├── V2__add_missing_columns.sql
 │               └── V3__add_sale_items_created_at.sql
 ├── frontend/
-│   ├── Dockerfile
+│   ├── Dockerfile                  (sets BUILD_STANDALONE=true for standalone output)
 │   ├── .dockerignore
-│   ├── next.config.ts
-│   ├── package.json
+│   ├── next.config.ts              (standalone output conditional on BUILD_STANDALONE)
+│   ├── package.json                (Next.js 15.5.18)
 │   ├── public/
 │   └── src/
 │       ├── app/
 │       │   ├── (auth)/login/page.tsx
 │       │   ├── (app)/
-│       │   │   ├── layout.tsx
+│       │   │   ├── layout.tsx      (pt-14 md:pt-0 for mobile header offset)
 │       │   │   ├── dashboard/page.tsx
 │       │   │   ├── customers/page.tsx
-│       │   │   ├── sales/page.tsx
-│       │   │   ├── sales/new/page.tsx
+│       │   │   ├── sales/page.tsx  (+ admin edit modal)
+│       │   │   ├── sales/new/      (+ pricing tier selector with default pre-selection)
 │       │   │   ├── cycles/page.tsx
 │       │   │   ├── expenses/page.tsx
 │       │   │   ├── inventory/page.tsx
@@ -169,13 +180,16 @@ farm_management_system/
 │       │   ├── layout.tsx
 │       │   ├── page.tsx
 │       │   └── providers.tsx
-│       ├── components/layout/Sidebar.tsx
+│       ├── components/layout/
+│       │   └── Sidebar.tsx         (mobile drawer + hamburger menu)
 │       ├── lib/
 │       │   ├── api.ts
 │       │   ├── auth.ts
 │       │   └── utils.ts
 │       └── types/index.ts
 ├── docker-compose.yml
+├── .env.example                    ← template — copy to .env before first run
+├── .gitignore
 ├── README.md
 └── ARCHITECTURE.md
 ```
@@ -297,9 +311,32 @@ The system uses **stateless JWT authentication**. No server-side session is main
 - `/api/auth/**` is `permitAll`; everything else requires authentication
 - Spring's `UserDetailsService` is **not** used — custom `JwtAuthFilter` does full authentication inline
 
+#### CORS Configuration
+
+Allowed origins are driven by the `ALLOWED_ORIGINS` environment variable (comma-separated list). `setAllowedOriginPatterns` is used instead of `setAllowedOrigins`, which enables wildcard subdomain matching (e.g. `https://*.vercel.app` for Vercel preview deployments).
+
+```java
+config.setAllowedOriginPatterns(origins);   // supports wildcards
+config.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
+config.setAllowedHeaders(List.of("*"));
+config.setAllowCredentials(true);
+```
+
+In development, `ALLOWED_ORIGINS` defaults to `http://localhost:3000`. In production (Render), set it to your Vercel domain(s).
+
+#### Login Rate Limiting
+
+`LoginRateLimiterService` (Bucket4j) enforces **5 login attempts per IP per minute**. If the limit is exceeded, `AuthController` returns HTTP `429 Too Many Requests` before any credential check occurs.
+
+- The real client IP is extracted from the `X-Forwarded-For` header (set by Render/Vercel reverse proxies), falling back to `X-Real-IP`, then `request.getRemoteAddr()`.
+- Buckets are stored in a `ConcurrentHashMap<String, Bucket>` in memory (no Redis dependency).
+- An `@Scheduled(fixedRate = 3_600_000)` task clears the map hourly to prevent unbounded growth. `@EnableScheduling` on `FarmManagementApplication` activates this.
+
+> **Dev note**: In local development behind a shared NAT (office / home router), all developers share one IP. If you hit the limit while testing, wait 1 minute for the bucket to refill.
+
 #### Password Hashing
 
-`BCryptPasswordEncoder` is configured as a Spring bean and injected wherever password operations occur. The `DataSeeder` uses it to hash the default admin password at startup.
+`BCryptPasswordEncoder` is configured as a Spring bean and injected wherever password operations occur. The `DataSeeder` uses it to hash the admin password read from `ADMIN_INITIAL_PASSWORD` at startup.
 
 ---
 
@@ -377,20 +414,26 @@ GET    /cycles/{id}/profit        → CycleProfitDto
 ```
 
 #### `sales`
-Creates sales transactions. Auto-prices based on customer type.
+Creates and manages sales transactions. Auto-prices based on customer type, with an optional per-sale tier override.
 
-Sale creation flow:
-1. Fetch customer → derive tier name
-2. `PricingTierService.getPriceForTier(tier)` → unit price
-3. `totalPrice = unitPrice × quantityKg`
-4. `invoiceStatus = CREDIT payment? "UNPAID" : "PAID"`
-5. Save `Sale` → auto-generate `invoiceNumber = INV-{year}-{id}`
-6. Save `SaleItem`
+**Sale creation flow:**
+1. Fetch customer → derive default tier from `customer.getCustomerType().toPricingTier()`
+2. If `pricingTierName` is provided in the request body, use that tier instead (override)
+3. `PricingTierService.getPriceForTier(tier)` → unit price
+4. `totalPrice = unitPrice × quantityKg`
+5. `invoiceStatus = CREDIT payment? "UNPAID" : "PAID"`
+6. Save `Sale` → auto-generate `invoiceNumber = INV-{year}-{id}`
+7. Save `SaleItem`
+
+**Sale update flow (ADMIN only):**
+- `UpdateSaleRequest` uses nullable fields — only non-null fields are patched
+- If `quantityKg` or `pricingTierName` changes, `totalPrice` and the linked `SaleItem` are recalculated atomically in the same transaction
 
 ```
 POST   /sales        → SaleDto
 GET    /sales        → PageResponse<SaleDto>  (from, to, page, size query params)
 GET    /sales/{id}   → SaleDto
+PUT    /sales/{id}   → SaleDto  (ADMIN only)
 ```
 
 #### `expense`
@@ -498,7 +541,7 @@ Default seed data:
 | HOTEL | 2,200 |
 | DISTRIBUTOR | 1,600 |
 
-> **Production note**: Change the admin password immediately after first login. The DataSeeder password is in plaintext in source code — suitable for development only.
+> **Note**: The DataSeeder is idempotent — it checks for an existing tenant before inserting. After the first startup, it is a no-op regardless of `ADMIN_INITIAL_PASSWORD`. To reset the admin password after initial setup, update it directly via the Users page (ADMIN role required).
 
 ---
 
@@ -641,15 +684,17 @@ interface RangeReport {
 ```
 Frontend (sales/new/page.tsx)
 │
-│  1. User selects customer, enters quantity kg, chooses payment method
-│  2. api.post('/sales', { customerId, quantityKg, paymentMethod, cycleId? })
+│  1. User selects customer → tier selector pre-fills with customer's default tier
+│  2. User enters quantity kg, chooses payment method
+│     (optionally selects a different pricing tier — "Override" badge appears)
+│  3. api.post('/sales', { customerId, quantityKg, paymentMethod, pricingTierName?, cycleId? })
 │
 Backend (SalesController → SalesService)
 │
 │  3. JwtAuthFilter: parse JWT → TenantContext.set(1)
 │  4. customerRepo.findByIdAndTenantId(customerId, tenantId) → Customer
-│  5. customer.getCustomerType().toPricingTier() → "WHOLESALE"
-│  6. pricingTierService.getPriceForTier("WHOLESALE") → 1800.00
+│  5. tierName = pricingTierName ?? customer.getCustomerType().toPricingTier() → "WHOLESALE"
+│  6. pricingTierService.getPriceForTier(tierName) → 1800.00
 │  7. totalPrice = 1800.00 × quantityKg
 │  8. invoiceStatus = paymentMethod == "CREDIT" ? "UNPAID" : "PAID"
 │  9. salesRepo.save(Sale) → returns saved entity with generated id
@@ -753,6 +798,7 @@ RUN npm ci
 COPY . .
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL   # baked into JS bundle here
+ENV BUILD_STANDALONE=true                      # activates standalone output
 RUN npm run build                              # produces .next/standalone
 
 FROM node:20-alpine
@@ -765,7 +811,16 @@ EXPOSE 3000
 CMD ["node", "server.js"]
 ```
 
-`output: 'standalone'` in `next.config.ts` generates a self-contained `server.js` with no `node_modules/` dependency — the runtime image needs only Node.
+`output: 'standalone'` in `next.config.ts` is **conditional** — it activates only when `BUILD_STANDALONE=true` is set. The Dockerfile sets this env var; Vercel does not, so Vercel builds use its native Next.js runner without conflict.
+
+```ts
+// next.config.ts
+const nextConfig: NextConfig = {
+  output: process.env.BUILD_STANDALONE === 'true' ? 'standalone' : undefined,
+}
+```
+
+Standalone output generates a self-contained `server.js` with no `node_modules/` dependency — the runtime image needs only Node.
 
 ### 7.4 Volumes & Persistence
 
@@ -794,7 +849,7 @@ All responses follow: `{ "success": true/false, "message": "...", "data": <paylo
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/auth/login` | None | Login, returns JWT |
+| POST | `/auth/login` | None | Login, returns JWT. **Rate-limited: 5 req/min per IP** — returns `429` if exceeded |
 
 ### Users
 
@@ -844,9 +899,10 @@ All responses follow: `{ "success": true/false, "message": "...", "data": <paylo
 
 | Method | Path | Roles | Description |
 |---|---|---|---|
-| POST | `/sales` | ADMIN, FARM_MANAGER, SALES_OFFICER | Create sale |
-| GET | `/sales` | All | List sales (from, to, page, size) |
-| GET | `/sales/{id}` | All | Get sale with items |
+| POST | `/sales` | ADMIN, SALES_OFFICER | Create sale (optional `pricingTierName` overrides customer default) |
+| GET | `/sales` | ADMIN, SALES_OFFICER, ACCOUNTANT | List sales (from, to, page, size) |
+| GET | `/sales/{id}` | ADMIN, SALES_OFFICER, ACCOUNTANT | Get sale with items |
+| PUT | `/sales/{id}` | **ADMIN only** | Update sale — patches non-null fields; recalculates total if qty/tier changes |
 
 ### Expenses
 
@@ -886,9 +942,9 @@ All responses follow: `{ "success": true/false, "message": "...", "data": <paylo
 
 | Role | Capabilities |
 |---|---|
-| `ADMIN` | Full access to all modules including user management, pricing, cycle closure |
-| `FARM_MANAGER` | Customers, ponds, cycles, sales, expenses, inventory. Cannot manage users or close cycles |
-| `SALES_OFFICER` | Create sales, view customers, view inventory. Read-only on reports |
+| `ADMIN` | Full access to all modules including user management, pricing, cycle closure, and editing any sale |
+| `FARM_MANAGER` | Customers, ponds, cycles, create sales, expenses, inventory. Cannot manage users, edit past sales, or close cycles |
+| `SALES_OFFICER` | Create sales (with tier override), view customers. Read-only on reports |
 | `ACCOUNTANT` | Record payments, view all financial reports, read-only on operations |
 
 Spring Security `@PreAuthorize("hasAnyRole('ADMIN','FARM_MANAGER')")` annotations on controller methods enforce these boundaries server-side.
@@ -994,14 +1050,18 @@ Create `src/app/(app)/vehicles/page.tsx` using `useQuery` and `useMutation` foll
 
 ## 11. Environment Variables
 
+Copy `.env.example` to `.env` before first run. Variables marked **Required** will cause startup failure if unset.
+
 ### Backend
 
-| Variable | Default | Required in Production | Description |
+| Variable | Default | Required | Description |
 |---|---|---|---|
-| `DB_URL` | `jdbc:postgresql://localhost:5432/farm_db` | Yes | JDBC connection URL |
-| `DB_USERNAME` | `farm_user` | Yes | Database user |
-| `DB_PASSWORD` | `farm_pass` | Yes | Database password |
-| `JWT_SECRET` | `crispfarm-secret-key-...` | **Yes** | HMAC signing secret (min 32 chars, prefer 64+) |
+| `DB_URL` | `jdbc:postgresql://db:5432/farm_db` | **Yes** | JDBC connection URL |
+| `DB_USERNAME` | `farm_user` | **Yes** | Database user |
+| `DB_PASSWORD` | `farm_pass` | **Yes** | Database password |
+| `JWT_SECRET` | fallback dev string | **Yes (prod)** | HMAC signing secret — min 32 chars, use 64+ in production |
+| `ADMIN_INITIAL_PASSWORD` | *(none — no fallback)* | **Yes** | Password for seeded admin account. Docker Compose fails loudly if missing. Only used on first startup. |
+| `ALLOWED_ORIGINS` | `http://localhost:3000` | No | Comma-separated CORS allowed origins. Supports wildcard patterns (e.g. `https://*.vercel.app`). |
 | `JWT_EXPIRATION_MS` | `86400000` (24h) | No | Token lifetime in milliseconds |
 | `PORT` | `8080` | No | HTTP port |
 
@@ -1009,7 +1069,7 @@ Create `src/app/(app)/vehicles/page.tsx` using `useQuery` and `useMutation` foll
 
 | Variable | Default | Notes |
 |---|---|---|
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8080/api` | **Build-time only** — must be passed as Docker `build.args`, not `environment` |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8080/api` | **Build-time only** — baked into the JS bundle at `npm run build`. Must be passed as a Docker `build.args` entry, not a runtime `environment` entry. Changing it requires a frontend image rebuild. |
 
 ---
 
@@ -1038,3 +1098,97 @@ Spring's Jackson serialiser outputs `BigDecimal` as a JSON string (e.g., `"2000.
 ### DataSeeder Password
 
 The admin password is set via the `ADMIN_INITIAL_PASSWORD` environment variable, read by `DataSeeder.java` on first startup. It is never hardcoded in source. Set it in your `.env` file locally and in Render environment variables for production. The seeder only runs once — after the first tenant is created it is skipped entirely.
+
+### `ADMIN_INITIAL_PASSWORD` Required at Startup
+
+`docker compose up` will fail immediately if `ADMIN_INITIAL_PASSWORD` is missing from `.env`. This is intentional — the password must never fall back to a default value. The `:?` syntax in `docker-compose.yml` (`${ADMIN_INITIAL_PASSWORD:?ADMIN_INITIAL_PASSWORD must be set in .env}`) causes Docker Compose to exit with a clear error message.
+
+### `NEXT_PUBLIC_*` Build-Time Baking
+
+`NEXT_PUBLIC_API_URL` is embedded into the JavaScript bundle at build time, not injected at runtime. If you need to change the API URL, you must rebuild the frontend image: `docker compose build frontend`. This is a Next.js architectural constraint, not a bug.
+
+### Login Rate Limit in Shared Dev Environments
+
+The login rate limiter allows 5 attempts per IP per minute. In development behind a shared NAT (office or home router), all developers appear to come from the same IP. If you hit the limit during testing, wait 1 minute for the bucket to refill automatically.
+
+### Mobile Sidebar Architecture
+
+The sidebar uses CSS transform transitions rather than conditional rendering. On mobile it is always in the DOM — hidden with `-translate-x-full`, shown with `translate-x-0`. This avoids layout flicker on open/close. On desktop (`md:` breakpoint), it reverts to normal document flow with `md:relative md:translate-x-0`, ignoring the transform entirely.
+
+---
+
+## 13. CI/CD & Deployment
+
+### Branch Strategy
+
+```
+feature/* ──▶ PR ──▶ develop ──▶ STAGING   (auto-deploy, no approval)
+                         │
+                         └──▶ PR ──▶ main ──▶ PRODUCTION  (requires approval)
+```
+
+### Free Hosting Stack
+
+| Service | Platform | Notes |
+|---|---|---|
+| **Database** | [Neon](https://neon.tech) | Free PostgreSQL with branch support. Use `main` branch for production, create a `staging` branch for staging. |
+| **Backend** | [Render](https://render.com) | Docker deploy. Create two services: `crispfarm-backend-staging` and `crispfarm-backend-prod`. Free tier sleeps after 15 min inactivity. |
+| **Frontend** | [Vercel](https://vercel.com) | Native Next.js. `main` branch → Production environment. All other branches (including `develop`) → Preview environment. |
+| **CI/CD** | GitHub Actions | Tests on every push; Render deploy hooks triggered per environment; approval gate for production. |
+
+### GitHub Actions Workflow (`.github/workflows/deploy.yml`)
+
+The workflow has three jobs:
+
+| Job | Trigger | Environment | Behaviour |
+|---|---|---|---|
+| `test` | Every push / PR | — | Compiles backend, runs tests |
+| `deploy-staging` | Push to `develop` | `staging` GitHub Environment | Triggers Render staging deploy hook |
+| `deploy-production` | Push to `main` | `production` GitHub Environment | Waits for required reviewer approval, then triggers Render production deploy hook |
+
+### Required GitHub Secrets
+
+| Secret | GitHub Environment | Value |
+|---|---|---|
+| `RENDER_DEPLOY_HOOK_URL` | `staging` | Deploy hook URL from Render staging service settings |
+| `RENDER_DEPLOY_HOOK_URL` | `production` | Deploy hook URL from Render production service settings |
+
+> Both secrets share the same name but are scoped to different GitHub Environments, so the correct URL is used per job.
+
+### Required Environment Variables Per Platform
+
+#### Render (Backend)
+
+| Variable | Staging | Production |
+|---|---|---|
+| `DB_URL` | Neon staging branch connection string | Neon main branch connection string |
+| `DB_USERNAME` | Neon staging user | Neon main user |
+| `DB_PASSWORD` | Neon staging password | Neon main password |
+| `JWT_SECRET` | Any strong random string | **Different** strong random string |
+| `ADMIN_INITIAL_PASSWORD` | Staging password | Production password |
+| `ALLOWED_ORIGINS` | `https://*.vercel.app` | `https://*.vercel.app` (or specific domain) |
+
+#### Vercel (Frontend)
+
+| Variable | Preview Environment | Production Environment |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | Render staging backend URL | Render production backend URL |
+
+> Vercel environment variables are scoped per environment in Project Settings → Environment Variables. Set the staging URL for "Preview" and the production URL for "Production".
+
+### Setting Up a Production Approval Gate
+
+1. Go to your GitHub repository → **Settings → Environments**
+2. Create an environment named exactly `production`
+3. Under **Deployment protection rules**, enable **Required reviewers**
+4. Add yourself (or your team leads) as required reviewers
+5. Any push to `main` will now pause at the `deploy-production` job and send an approval request email before deploying
+
+### Neon Database Branching
+
+Neon calls isolated database copies **Branches** (not environments). The recommended setup:
+
+- `main` branch → used by the production Render service
+- Create a `staging` branch from `main` → used by the staging Render service
+
+Each branch has its own connection string. Find them in the Neon dashboard under your project → **Branches**.
