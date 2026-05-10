@@ -26,6 +26,8 @@ services:
       DB_USERNAME: farm_user
       DB_PASSWORD: farm_pass
       JWT_SECRET: ${JWT_SECRET:-local-dev-secret-please-change-in-production!!}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:?ADMIN_INITIAL_PASSWORD must be set in .env}
     depends_on:
       db:
         condition: service_healthy

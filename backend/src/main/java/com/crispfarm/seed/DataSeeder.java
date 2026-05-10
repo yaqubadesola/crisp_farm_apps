@@ -11,6 +11,7 @@ import com.crispfarm.modules.user.UserRepository;
 import com.crispfarm.modules.user.UserRole;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -29,6 +30,9 @@ public class DataSeeder implements ApplicationRunner {
     private final PricingTierRepository pricingTierRepository;
     private final CustomerTypeRepository customerTypeRepository;
     private final PasswordEncoder passwordEncoder;
+
+    @Value("${app.admin.initial-password}")
+    private String adminInitialPassword;
 
     @Override
     @Transactional
@@ -53,7 +57,7 @@ public class DataSeeder implements ApplicationRunner {
         User admin = userRepository.save(User.builder()
                 .tenantId(tenant.getId())
                 .username("crispfarm")
-                .passwordHash(passwordEncoder.encode("crispAdmin@@2026.."))
+                .passwordHash(passwordEncoder.encode(adminInitialPassword))
                 .fullName("CrispFarm Admin")
                 .role(UserRole.ADMIN)
                 .build());
