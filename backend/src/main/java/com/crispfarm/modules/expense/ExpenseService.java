@@ -66,8 +66,14 @@ public class ExpenseService {
         Long tenantId = TenantContext.get();
         Expense expense = repo.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> ApiException.notFound("Expense not found"));
-        if (req.category() != null && !req.category().isBlank())
-            expense.setCategory(ExpenseCategory.valueOf(req.category().toUpperCase()));
+        if (req.category() != null && !req.category().isBlank()) {
+            try {
+                expense.setCategory(ExpenseCategory.valueOf(req.category().toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                throw ApiException.badRequest("Invalid category: '" + req.category() +
+                        "'. Valid values are: " + java.util.Arrays.toString(ExpenseCategory.values()));
+            }
+        }
         if (req.amount() != null)
             expense.setAmount(req.amount());
         if (req.expenseDate() != null)
