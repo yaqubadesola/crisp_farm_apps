@@ -49,14 +49,17 @@ export default function SalesHistoryPage() {
 
   const [from, setFrom] = useState(format(subDays(new Date(), 29), 'yyyy-MM-dd'))
   const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [statusFilter, setStatusFilter] = useState('')
   const [page, setPage] = useState(0)
   const [editState, setEditState] = useState<EditState | null>(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['sales', from, to, page],
-    queryFn: () =>
-      api.get<ApiResponse<PageResponse<Sale>>>(`/sales?from=${from}&to=${to}&page=${page}&size=20`)
-        .then(r => r.data.data),
+    queryKey: ['sales', from, to, statusFilter, page],
+    queryFn: () => {
+      const params = new URLSearchParams({ from, to, page: String(page), size: '20' })
+      if (statusFilter) params.set('status', statusFilter)
+      return api.get<ApiResponse<PageResponse<Sale>>>(`/sales?${params}`).then(r => r.data.data)
+    },
   })
 
   const { data: tiers } = useQuery({
@@ -104,22 +107,31 @@ export default function SalesHistoryPage() {
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-xl font-bold text-gray-900">Sales History</h2>
-        <div className="flex items-center gap-2 text-sm flex-wrap">
-          <label className="text-gray-600">From</label>
-          <input
-            type="date"
-            value={from}
-            onChange={e => { setFrom(e.target.value); setPage(0) }}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
-          />
-          <label className="text-gray-600">To</label>
-          <input
-            type="date"
-            value={to}
-            onChange={e => { setTo(e.target.value); setPage(0) }}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
-          />
-        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex items-center gap-2 text-sm flex-wrap">
+        <label className="text-gray-600">From</label>
+        <input
+          type="date" value={from}
+          onChange={e => { setFrom(e.target.value); setPage(0) }}
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+        />
+        <label className="text-gray-600">To</label>
+        <input
+          type="date" value={to}
+          onChange={e => { setTo(e.target.value); setPage(0) }}
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+        />
+        <label className="text-gray-600 ml-2">Status</label>
+        <select
+          value={statusFilter}
+          onChange={e => { setStatusFilter(e.target.value); setPage(0) }}
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+        >
+          <option value="">All</option>
+          {INVOICE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
       </div>
 
       {isLoading ? (
@@ -177,6 +189,22 @@ export default function SalesHistoryPage() {
                   </tr>
                 ))}
               </tbody>
+              {data && data.content.length > 0 && (() => {
+                const pageQty = data.content.reduce((s, r) => s + Number(r.totalQuantityKg), 0)
+                const pageRev = data.content.reduce((s, r) => s + Number(r.totalPrice), 0)
+                return (
+                  <tfoot>
+                    <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold text-gray-800">
+                      <td className="px-4 py-3" colSpan={4}>
+                        Page total ({data.content.length} records)
+                      </td>
+                      <td className="px-4 py-3 text-right">{pageQty.toFixed(3)} kg</td>
+                      <td className="px-4 py-3 text-right text-green-700">{fmt(pageRev)}</td>
+                      <td colSpan={isAdmin ? 3 : 2} />
+                    </tr>
+                  </tfoot>
+                )
+              })()}
             </table>
           </div>
 

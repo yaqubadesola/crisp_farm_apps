@@ -14,8 +14,7 @@ import java.util.Optional;
 public interface ExpenseRepository extends JpaRepository<Expense, Long> {
 
     @Query("SELECT e FROM Expense e WHERE e.tenantId = :tid " +
-           "AND (:from IS NULL OR e.expenseDate >= :from) " +
-           "AND (:to IS NULL OR e.expenseDate <= :to) " +
+           "AND e.expenseDate BETWEEN :from AND :to " +
            "ORDER BY e.expenseDate DESC, e.createdAt DESC")
     Page<Expense> findByTenantAndDateRange(@Param("tid") Long tenantId,
                                            @Param("from") LocalDate from,

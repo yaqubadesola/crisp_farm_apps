@@ -6,6 +6,7 @@ import com.crispfarm.common.tenant.TenantContext;
 import com.crispfarm.modules.expense.dto.CreateExpenseRequest;
 import com.crispfarm.modules.expense.dto.ExpenseDto;
 import com.crispfarm.modules.expense.dto.ExpenseSummaryDto;
+import com.crispfarm.modules.expense.dto.UpdateExpenseRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -44,8 +45,10 @@ public class ExpenseService {
 
     @Transactional(readOnly = true)
     public PageResponse<ExpenseDto> list(LocalDate from, LocalDate to, int page, int size) {
+        LocalDate f = from != null ? from : LocalDate.of(2000, 1, 1);
+        LocalDate t = to != null ? to : LocalDate.now();
         return PageResponse.from(
-                repo.findByTenantAndDateRange(TenantContext.get(), from, to, PageRequest.of(page, size))
+                repo.findByTenantAndDateRange(TenantContext.get(), f, t, PageRequest.of(page, size))
                     .map(ExpenseDto::from)
         );
     }
@@ -56,6 +59,24 @@ public class ExpenseService {
                 repo.findByIdAndTenantId(id, TenantContext.get())
                     .orElseThrow(() -> ApiException.notFound("Expense not found"))
         );
+    }
+
+    @Transactional
+    public ExpenseDto update(Long id, UpdateExpenseRequest req) {
+        Long tenantId = TenantContext.get();
+        Expense expense = repo.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> ApiException.notFound("Expense not found"));
+        if (req.category() != null && !req.category().isBlank())
+            expense.setCategory(ExpenseCategory.valueOf(req.category().toUpperCase()));
+        if (req.amount() != null)
+            expense.setAmount(req.amount());
+        if (req.expenseDate() != null)
+            expense.setExpenseDate(req.expenseDate());
+        if (req.description() != null)
+            expense.setDescription(req.description().isBlank() ? null : req.description());
+        if (req.cycleId() != null)
+            expense.setCycleId(req.cycleId() <= 0 ? null : req.cycleId());
+        return ExpenseDto.from(repo.save(expense));
     }
 
     @Transactional(readOnly = true)

@@ -5,6 +5,7 @@ import com.crispfarm.common.dto.PageResponse;
 import com.crispfarm.modules.expense.dto.CreateExpenseRequest;
 import com.crispfarm.modules.expense.dto.ExpenseDto;
 import com.crispfarm.modules.expense.dto.ExpenseSummaryDto;
+import com.crispfarm.modules.expense.dto.UpdateExpenseRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -42,6 +43,12 @@ public class ExpenseController {
     @PreAuthorize("hasAnyRole('ADMIN','FARM_MANAGER','ACCOUNTANT')")
     public ApiResponse<ExpenseDto> getById(@PathVariable Long id) {
         return ApiResponse.success(expenseService.getById(id));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','FARM_MANAGER','ACCOUNTANT')")
+    public ApiResponse<ExpenseDto> update(@PathVariable Long id, @RequestBody UpdateExpenseRequest req) {
+        return ApiResponse.success(expenseService.update(id, req));
     }
 
     @GetMapping("/summary")

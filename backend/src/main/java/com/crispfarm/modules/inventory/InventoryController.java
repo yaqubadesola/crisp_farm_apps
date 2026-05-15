@@ -4,6 +4,7 @@ import com.crispfarm.common.dto.ApiResponse;
 import com.crispfarm.common.dto.PageResponse;
 import com.crispfarm.modules.inventory.dto.*;
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.PutMapping;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,6 +36,13 @@ public class InventoryController {
     @PreAuthorize("hasAnyRole('ADMIN','FARM_MANAGER')")
     public ApiResponse<InventoryItemDto> createItem(@Valid @RequestBody CreateInventoryItemRequest req) {
         return ApiResponse.success(inventoryService.createItem(req));
+    }
+
+    @PutMapping("/items/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','FARM_MANAGER')")
+    public ApiResponse<InventoryItemDto> updateItem(@PathVariable Long id,
+                                                     @RequestBody UpdateInventoryItemRequest req) {
+        return ApiResponse.success(inventoryService.updateItem(id, req));
     }
 
     @PostMapping("/transactions")
