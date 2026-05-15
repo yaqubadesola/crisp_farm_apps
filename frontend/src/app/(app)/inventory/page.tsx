@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, X, AlertTriangle, Package } from 'lucide-react'
+import { Plus, X, AlertTriangle, Package, Pencil } from 'lucide-react'
 import api from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 import type { ApiResponse, PageResponse, InventoryItem, InventoryTransaction, InventoryCategory } from '@/types'
 
 const CATEGORIES: InventoryCategory[] = ['FEED', 'MEDICATION', 'EQUIPMENT', 'OTHER']
@@ -24,16 +25,30 @@ const TX_COLORS: Record<string, string> = {
 
 export default function InventoryPage() {
   const qc = useQueryClient()
+  const { hasRole } = useAuth()
+  const canEdit = hasRole('ADMIN', 'FARM_MANAGER')
+
   const [tab, setTab] = useState<'items' | 'transactions'>('items')
   const [showItemForm, setShowItemForm] = useState(false)
   const [showTxForm, setShowTxForm] = useState(false)
   const [txPage, setTxPage] = useState(0)
+
+  // Filters
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [txItemFilter, setTxItemFilter] = useState('')
 
   // New item form
   const [itemName, setItemName] = useState('')
   const [itemCategory, setItemCategory] = useState<InventoryCategory>('FEED')
   const [itemUnit, setItemUnit] = useState('kg')
   const [reorderLevel, setReorderLevel] = useState('')
+
+  // Edit item state
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editCategory, setEditCategory] = useState<InventoryCategory>('FEED')
+  const [editUnit, setEditUnit] = useState('')
+  const [editReorder, setEditReorder] = useState('')
 
   // New transaction form
   const [txItemId, setTxItemId] = useState('')
@@ -42,17 +57,43 @@ export default function InventoryPage() {
   const [txUnitCost, setTxUnitCost] = useState('')
   const [txNotes, setTxNotes] = useState('')
 
+  const openEditItem = (item: InventoryItem) => {
+    setEditingItem(item)
+    setEditName(item.name)
+    setEditCategory(item.category)
+    setEditUnit(item.unit)
+    setEditReorder(item.reorderLevel != null ? String(item.reorderLevel) : '')
+  }
+
   const { data: items, isLoading: loadingItems } = useQuery({
     queryKey: ['inventory-items'],
     queryFn: () => api.get<ApiResponse<InventoryItem[]>>('/inventory/items').then(r => r.data.data),
   })
 
   const { data: transactions, isLoading: loadingTx } = useQuery({
-    queryKey: ['inventory-tx', txPage],
-    queryFn: () =>
-      api.get<ApiResponse<PageResponse<InventoryTransaction>>>(`/inventory/transactions?page=${txPage}&size=20`)
-        .then(r => r.data.data),
+    queryKey: ['inventory-tx', txItemFilter, txPage],
+    queryFn: () => {
+      const params = new URLSearchParams({ page: String(txPage), size: '20' })
+      if (txItemFilter) params.set('itemId', txItemFilter)
+      return api.get<ApiResponse<PageResponse<InventoryTransaction>>>(`/inventory/transactions?${params}`)
+        .then(r => r.data.data)
+    },
     enabled: tab === 'transactions',
+  })
+
+  const { mutate: updateItem, isPending: updatingItem } = useMutation({
+    mutationFn: () =>
+      api.put(`/inventory/items/${editingItem!.id}`, {
+        name: editName,
+        category: editCategory,
+        unit: editUnit,
+        reorderLevel: editReorder ? parseFloat(editReorder) : null,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory-items'] })
+      setEditingItem(null)
+    },
+    onError: (e: any) => alert(e?.response?.data?.message ?? 'Failed to update item'),
   })
 
   const { mutate: createItem, isPending: creatingItem } = useMutation({
@@ -115,6 +156,34 @@ export default function InventoryPage() {
         </div>
       )}
 
+      {/* Filters */}
+      {tab === 'items' && (
+        <div className="flex items-center gap-2 text-sm flex-wrap">
+          <label className="text-gray-600">Category</label>
+          <select
+            value={categoryFilter}
+            onChange={e => setCategoryFilter(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+          >
+            <option value="">All</option>
+            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+      )}
+      {tab === 'transactions' && (
+        <div className="flex items-center gap-2 text-sm flex-wrap">
+          <label className="text-gray-600">Item</label>
+          <select
+            value={txItemFilter}
+            onChange={e => { setTxItemFilter(e.target.value); setTxPage(0) }}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+          >
+            <option value="">All items</option>
+            {items?.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+          </select>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">
         {(['items', 'transactions'] as const).map(t => (
@@ -136,15 +205,18 @@ export default function InventoryPage() {
                   <th className="px-4 py-3 font-medium text-right">In Stock</th>
                   <th className="px-4 py-3 font-medium text-right">Reorder At</th>
                   <th className="px-4 py-3 font-medium">Status</th>
+                  {canEdit && <th className="px-4 py-3 font-medium"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {(!items || items.length === 0) && (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                  <tr><td colSpan={canEdit ? 6 : 5} className="px-4 py-8 text-center text-gray-400">
                     <Package size={24} className="mx-auto mb-2 opacity-30" />No inventory items
                   </td></tr>
                 )}
-                {items?.map(item => (
+                {(items ?? [])
+                  .filter(item => !categoryFilter || item.category === categoryFilter)
+                  .map(item => (
                   <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium">{item.name}</td>
                     <td className="px-4 py-3">
@@ -165,6 +237,17 @@ export default function InventoryPage() {
                         <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">OK</span>
                       )}
                     </td>
+                    {canEdit && (
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => openEditItem(item)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                          title="Edit item"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -224,6 +307,54 @@ export default function InventoryPage() {
             )}
           </>
         )
+      )}
+
+      {/* Edit item modal */}
+      {editingItem && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900 text-lg">Edit Item</h3>
+              <button onClick={() => setEditingItem(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name <span className="text-red-500">*</span></label>
+              <input value={editName} onChange={e => setEditName(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+              <div className="grid grid-cols-2 gap-2">
+                {CATEGORIES.map(c => (
+                  <button key={c} onClick={() => setEditCategory(c as InventoryCategory)}
+                    className={`py-2 rounded-lg text-xs font-medium border transition-colors ${editCategory === c ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-300 text-gray-600'}`}>
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                <input value={editUnit} onChange={e => setEditUnit(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reorder At</label>
+                <input type="number" min="0" step="0.1" value={editReorder} onChange={e => setEditReorder(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+              </div>
+            </div>
+            <p className="text-xs text-gray-400">Note: stock quantity is adjusted via transactions, not here.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setEditingItem(null)} className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+              <button onClick={() => updateItem()} disabled={updatingItem || !editName.trim()}
+                className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
+                {updatingItem ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Add item modal */}

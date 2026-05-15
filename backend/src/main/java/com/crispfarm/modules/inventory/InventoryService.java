@@ -44,6 +44,21 @@ public class InventoryService {
     }
 
     @Transactional
+    public InventoryItemDto updateItem(Long id, UpdateInventoryItemRequest req) {
+        Long tid = TenantContext.get();
+        InventoryItem item = itemRepo.findByIdAndTenantId(id, tid)
+                .orElseThrow(() -> ApiException.notFound("Inventory item not found"));
+        if (req.name() != null && !req.name().isBlank())
+            item.setName(req.name().trim());
+        if (req.category() != null && !req.category().isBlank())
+            item.setCategory(req.category().toUpperCase());
+        if (req.unit() != null && !req.unit().isBlank())
+            item.setUnit(req.unit().trim());
+        item.setReorderLevel(req.reorderLevel());
+        return InventoryItemDto.from(itemRepo.save(item));
+    }
+
+    @Transactional
     public InventoryTransactionDto recordTransaction(RecordTransactionRequest req) {
         Long tid = TenantContext.get();
         InventoryItem item = itemRepo.findByIdAndTenantId(req.itemId(), tid)

@@ -147,6 +147,14 @@ export default function ReportsPage() {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold text-gray-800">
+                <td className="px-4 py-3">Total ({breakdown?.length ?? 0} days)</td>
+                <td className="px-4 py-3 text-right">{rangeReport?.salesCount ?? 0}</td>
+                <td className="px-4 py-3 text-right">{Number(rangeReport?.totalQuantityKg ?? 0).toFixed(3)} kg</td>
+                <td className="px-4 py-3 text-right text-green-700">{fmt(rangeReport?.totalRevenue)}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}

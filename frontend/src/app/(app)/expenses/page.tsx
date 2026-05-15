@@ -3,9 +3,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format, subDays, startOfMonth } from 'date-fns'
-import { Plus, X } from 'lucide-react'
+import { Plus, X, Pencil } from 'lucide-react'
 import api from '@/lib/api'
 import { fmt } from '@/lib/utils'
+import { useAuth } from '@/lib/auth'
 import type { ApiResponse, PageResponse, Expense, ExpenseCategory, ExpenseSummary } from '@/types'
 
 const CATEGORIES: ExpenseCategory[] = ['FEED', 'MEDICATION', 'LABOR', 'LOGISTICS', 'SALARY', 'UTILITIES', 'OTHER']
@@ -31,25 +32,37 @@ function SummaryCard({ label, value, accent }: { label: string; value: string; a
 
 export default function ExpensesPage() {
   const qc = useQueryClient()
+  const { hasRole } = useAuth()
+  const canEdit = hasRole('ADMIN', 'FARM_MANAGER', 'ACCOUNTANT')
   const today = format(new Date(), 'yyyy-MM-dd')
   const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd')
 
   const [from, setFrom] = useState(monthStart)
   const [to, setTo] = useState(today)
+  const [categoryFilter, setCategoryFilter] = useState('')
   const [page, setPage] = useState(0)
   const [showForm, setShowForm] = useState(false)
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
 
-  // Form state
+  // Create form state
   const [category, setCategory] = useState<ExpenseCategory>('FEED')
   const [amount, setAmount] = useState('')
   const [expenseDate, setExpenseDate] = useState(today)
   const [description, setDescription] = useState('')
 
+  // Edit form state
+  const [editCategory, setEditCategory] = useState<ExpenseCategory>('FEED')
+  const [editAmount, setEditAmount] = useState('')
+  const [editDate, setEditDate] = useState(today)
+  const [editDescription, setEditDescription] = useState('')
+
   const { data: expenses, isLoading } = useQuery({
-    queryKey: ['expenses', from, to, page],
-    queryFn: () =>
-      api.get<ApiResponse<PageResponse<Expense>>>(`/expenses?from=${from}&to=${to}&page=${page}&size=20`)
-        .then(r => r.data.data),
+    queryKey: ['expenses', from, to, categoryFilter, page],
+    queryFn: () => {
+      const params = new URLSearchParams({ from, to, page: String(page), size: '20' })
+      return api.get<ApiResponse<PageResponse<Expense>>>(`/expenses?${params}`)
+        .then(r => r.data.data)
+    },
   })
 
   const { data: summary } = useQuery({
@@ -58,6 +71,29 @@ export default function ExpensesPage() {
       api.get<ApiResponse<ExpenseSummary>>(`/expenses/summary?from=${from}&to=${to}`)
         .then(r => r.data.data),
   })
+
+  const { mutate: updateExpense, isPending: updatingExpense } = useMutation({
+    mutationFn: (e: Expense) =>
+      api.put(`/expenses/${e.id}`, {
+        category: editCategory,
+        amount: parseFloat(editAmount),
+        expenseDate: editDate,
+        description: editDescription || null,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['expenses'] })
+      setEditingExpense(null)
+    },
+    onError: (err: any) => alert(err?.response?.data?.message ?? 'Failed to update expense'),
+  })
+
+  const openEdit = (e: Expense) => {
+    setEditingExpense(e)
+    setEditCategory(e.category)
+    setEditAmount(String(Number(e.amount)))
+    setEditDate(e.expenseDate)
+    setEditDescription(e.description ?? '')
+  }
 
   const { mutate: createExpense, isPending } = useMutation({
     mutationFn: () =>
@@ -96,22 +132,29 @@ export default function ExpensesPage() {
         </button>
       </div>
 
-      {/* Date filter */}
+      {/* Filters */}
       <div className="flex items-center gap-2 text-sm flex-wrap">
         <label className="text-gray-600">From</label>
         <input
-          type="date"
-          value={from}
+          type="date" value={from}
           onChange={e => { setFrom(e.target.value); setPage(0) }}
           className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
         />
         <label className="text-gray-600">To</label>
         <input
-          type="date"
-          value={to}
+          type="date" value={to}
           onChange={e => { setTo(e.target.value); setPage(0) }}
           className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
         />
+        <label className="text-gray-600 ml-2">Category</label>
+        <select
+          value={categoryFilter}
+          onChange={e => { setCategoryFilter(e.target.value); setPage(0) }}
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+        >
+          <option value="">All</option>
+          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
       </div>
 
       {/* Summary cards */}
@@ -170,13 +213,16 @@ export default function ExpensesPage() {
                   <th className="px-4 py-3 font-medium text-right">Amount</th>
                   <th className="px-4 py-3 font-medium">Description</th>
                   <th className="px-4 py-3 font-medium">Recorded By</th>
+                  {canEdit && <th className="px-4 py-3 font-medium"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {expenses?.content.length === 0 && (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">No expenses in this period</td></tr>
+                  <tr><td colSpan={canEdit ? 6 : 5} className="px-4 py-8 text-center text-gray-400">No expenses in this period</td></tr>
                 )}
-                {expenses?.content.map(e => (
+                {(expenses?.content ?? [])
+                  .filter(e => !categoryFilter || e.category === categoryFilter)
+                  .map(e => (
                   <tr key={e.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-gray-700">{e.expenseDate}</td>
                     <td className="px-4 py-3">
@@ -187,9 +233,44 @@ export default function ExpensesPage() {
                     <td className="px-4 py-3 text-right font-semibold text-red-700">{fmt(e.amount)}</td>
                     <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{e.description ?? '—'}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{e.recordedBy}</td>
+                    {canEdit && (
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => openEdit(e)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                          title="Edit expense"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
+              {expenses && expenses.content.length > 0 && (() => {
+                const visibleRows = categoryFilter
+                  ? expenses.content.filter(e => e.category === categoryFilter)
+                  : expenses.content
+                const pageTotal = visibleRows.reduce((s, e) => s + Number(e.amount), 0)
+                return (
+                  <tfoot>
+                    <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold text-gray-800">
+                      <td className="px-4 py-3" colSpan={2}>
+                        Page total ({visibleRows.length} records)
+                      </td>
+                      <td className="px-4 py-3 text-right text-red-700">{fmt(pageTotal)}</td>
+                      <td colSpan={canEdit ? 3 : 2} />
+                    </tr>
+                    <tr className="bg-red-50 font-semibold text-gray-800">
+                      <td className="px-4 py-3" colSpan={2}>
+                        Period total {categoryFilter ? `(${categoryFilter})` : ''}
+                      </td>
+                      <td className="px-4 py-3 text-right text-red-700">{fmt(summary?.totalAmount)}</td>
+                      <td colSpan={canEdit ? 3 : 2} />
+                    </tr>
+                  </tfoot>
+                )
+              })()}
             </table>
           </div>
 
@@ -206,6 +287,72 @@ export default function ExpensesPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Edit expense modal */}
+      {editingExpense && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900 text-lg">Edit Expense</h3>
+              <button onClick={() => setEditingExpense(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+              <select
+                value={editCategory}
+                onChange={e => setEditCategory(e.target.value as ExpenseCategory)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+              >
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Amount (₦)</label>
+              <input
+                type="number" min="0.01" step="0.01"
+                value={editAmount}
+                onChange={e => setEditAmount(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+              <input
+                type="date" value={editDate}
+                onChange={e => setEditDate(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description <span className="text-gray-400">(optional)</span></label>
+              <textarea
+                value={editDescription}
+                onChange={e => setEditDescription(e.target.value)}
+                rows={2}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setEditingExpense(null)}
+                className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
+                Cancel
+              </button>
+              <button
+                onClick={() => updateExpense(editingExpense)}
+                disabled={updatingExpense || !editAmount || parseFloat(editAmount) <= 0}
+                className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+              >
+                {updatingExpense ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Record expense modal */}
