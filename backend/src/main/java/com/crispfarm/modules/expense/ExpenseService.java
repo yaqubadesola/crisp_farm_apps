@@ -70,8 +70,7 @@ public class ExpenseService {
             try {
                 expense.setCategory(ExpenseCategory.valueOf(req.category().toUpperCase()));
             } catch (IllegalArgumentException e) {
-                throw ApiException.badRequest("Invalid category: '" + req.category() +
-                        "'. Valid values are: " + java.util.Arrays.toString(ExpenseCategory.values()));
+                throw ApiException.badRequest("Invalid category: " + req.category());
             }
         }
         if (req.amount() != null)
