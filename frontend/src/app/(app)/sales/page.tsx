@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { format, subDays } from 'date-fns'
-import { Pencil, X } from 'lucide-react'
+import { format } from 'date-fns'
+import { Pencil, X, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
 import { fmt } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
@@ -47,11 +47,12 @@ export default function SalesHistoryPage() {
   const isAdmin = hasRole('ADMIN')
   const queryClient = useQueryClient()
 
-  const [from, setFrom] = useState(format(subDays(new Date(), 29), 'yyyy-MM-dd'))
+  const [from, setFrom] = useState(format(new Date(new Date().getFullYear(), 0, 1), 'yyyy-MM-dd'))
   const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [statusFilter, setStatusFilter] = useState('')
   const [page, setPage] = useState(0)
   const [editState, setEditState] = useState<EditState | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['sales', from, to, statusFilter, page],
@@ -73,6 +74,18 @@ export default function SalesHistoryPage() {
     queryFn: () => api.get<ApiResponse<FarmCycle[]>>('/cycles?status=ACTIVE&size=50').then(r => r.data.data),
     enabled: isAdmin,
     retry: false,
+  })
+
+  const { mutate: deleteSale, isPending: deleting } = useMutation({
+    mutationFn: (id: number) => api.delete(`/sales/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sales'] })
+      setDeletingId(null)
+    },
+    onError: (err: any) => {
+      alert(err?.response?.data?.message ?? 'Failed to delete sale')
+      setDeletingId(null)
+    },
   })
 
   const { mutate: updateSale, isPending: saving } = useMutation({
@@ -177,13 +190,22 @@ export default function SalesHistoryPage() {
                     </td>
                     {isAdmin && (
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => setEditState(buildEditState(sale))}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-                          title="Edit sale"
-                        >
-                          <Pencil size={14} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setEditState(buildEditState(sale))}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                            title="Edit sale"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            onClick={() => setDeletingId(sale.id)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            title="Delete sale"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -234,6 +256,34 @@ export default function SalesHistoryPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Delete confirm modal */}
+      {deletingId !== null && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-red-100 rounded-xl"><Trash2 size={18} className="text-red-600" /></div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Delete Sale?</h3>
+                <p className="text-sm text-gray-500 mt-0.5">This will permanently remove the sale record and all its line items.</p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setDeletingId(null)}
+                className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteSale(deletingId)}
+                disabled={deleting}
+                className="flex-1 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Edit modal */}

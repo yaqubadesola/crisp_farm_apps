@@ -131,6 +131,14 @@ public class SalesService {
         return enrichSale(sale, tenantId);
     }
 
+    @Transactional
+    public void delete(Long id) {
+        Long tenantId = TenantContext.get();
+        Sale sale = salesRepo.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> ApiException.notFound("Sale not found"));
+        salesRepo.delete(sale);
+    }
+
     private SaleDto enrichSale(Sale sale, Long tenantId) {
         String customerName = customerRepo.findByIdAndTenantId(sale.getCustomerId(), tenantId)
                 .map(Customer::getName).orElse("Unknown");

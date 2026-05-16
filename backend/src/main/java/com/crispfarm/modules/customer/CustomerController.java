@@ -44,4 +44,11 @@ public class CustomerController {
                                                             @Valid @RequestBody SaveCustomerRequest req) {
         return ResponseEntity.ok(ApiResponse.ok(service.update(id, req)));
     }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        service.delete(id);
+        return ResponseEntity.noContent().build();
+    }
 }

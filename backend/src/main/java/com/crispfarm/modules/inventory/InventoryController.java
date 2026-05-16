@@ -45,6 +45,13 @@ public class InventoryController {
         return ApiResponse.success(inventoryService.updateItem(id, req));
     }
 
+    @DeleteMapping("/items/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasRole('ADMIN')")
+    public void deleteItem(@PathVariable Long id) {
+        inventoryService.deleteItem(id);
+    }
+
     @PostMapping("/transactions")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('ADMIN','FARM_MANAGER')")

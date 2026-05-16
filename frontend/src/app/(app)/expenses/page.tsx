@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { format, subDays, startOfMonth } from 'date-fns'
-import { Plus, X, Pencil } from 'lucide-react'
+import { format } from 'date-fns'
+import { Plus, X, Pencil, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
 import { fmt } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
@@ -33,16 +33,18 @@ function SummaryCard({ label, value, accent }: { label: string; value: string; a
 export default function ExpensesPage() {
   const qc = useQueryClient()
   const { hasRole } = useAuth()
+  const isAdmin = hasRole('ADMIN')
   const canEdit = hasRole('ADMIN', 'FARM_MANAGER', 'ACCOUNTANT')
   const today = format(new Date(), 'yyyy-MM-dd')
-  const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd')
+  const yearStart = format(new Date(new Date().getFullYear(), 0, 1), 'yyyy-MM-dd')
 
-  const [from, setFrom] = useState(monthStart)
+  const [from, setFrom] = useState(yearStart)
   const [to, setTo] = useState(today)
   const [categoryFilter, setCategoryFilter] = useState('')
   const [page, setPage] = useState(0)
   const [showForm, setShowForm] = useState(false)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   // Create form state
   const [category, setCategory] = useState<ExpenseCategory>('FEED')
@@ -94,6 +96,18 @@ export default function ExpensesPage() {
     setEditDate(e.expenseDate)
     setEditDescription(e.description ?? '')
   }
+
+  const { mutate: deleteExpense, isPending: deleting } = useMutation({
+    mutationFn: (id: number) => api.delete(`/expenses/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['expenses'] })
+      setDeletingId(null)
+    },
+    onError: (err: any) => {
+      alert(err?.response?.data?.message ?? 'Failed to delete expense')
+      setDeletingId(null)
+    },
+  })
 
   const { mutate: createExpense, isPending } = useMutation({
     mutationFn: () =>
@@ -213,12 +227,12 @@ export default function ExpensesPage() {
                   <th className="px-4 py-3 font-medium text-right">Amount</th>
                   <th className="px-4 py-3 font-medium">Description</th>
                   <th className="px-4 py-3 font-medium">Recorded By</th>
-                  {canEdit && <th className="px-4 py-3 font-medium"></th>}
+                  {(canEdit || isAdmin) && <th className="px-4 py-3 font-medium"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {expenses?.content.length === 0 && (
-                  <tr><td colSpan={canEdit ? 6 : 5} className="px-4 py-8 text-center text-gray-400">No expenses in this period</td></tr>
+                  <tr><td colSpan={(canEdit || isAdmin) ? 6 : 5} className="px-4 py-8 text-center text-gray-400">No expenses in this period</td></tr>
                 )}
                 {(expenses?.content ?? [])
                   .filter(e => !categoryFilter || e.category === categoryFilter)
@@ -233,15 +247,28 @@ export default function ExpensesPage() {
                     <td className="px-4 py-3 text-right font-semibold text-red-700">{fmt(e.amount)}</td>
                     <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{e.description ?? '—'}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{e.recordedBy}</td>
-                    {canEdit && (
+                    {(canEdit || isAdmin) && (
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => openEdit(e)}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-                          title="Edit expense"
-                        >
-                          <Pencil size={14} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          {canEdit && (
+                            <button
+                              onClick={() => openEdit(e)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                              title="Edit expense"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                          )}
+                          {isAdmin && (
+                            <button
+                              onClick={() => setDeletingId(e.id)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                              title="Delete expense"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -259,14 +286,14 @@ export default function ExpensesPage() {
                         Page total ({visibleRows.length} records)
                       </td>
                       <td className="px-4 py-3 text-right text-red-700">{fmt(pageTotal)}</td>
-                      <td colSpan={canEdit ? 3 : 2} />
+                      <td colSpan={(canEdit || isAdmin) ? 3 : 2} />
                     </tr>
                     <tr className="bg-red-50 font-semibold text-gray-800">
                       <td className="px-4 py-3" colSpan={2}>
                         Period total {categoryFilter ? `(${categoryFilter})` : ''}
                       </td>
                       <td className="px-4 py-3 text-right text-red-700">{fmt(summary?.totalAmount)}</td>
-                      <td colSpan={canEdit ? 3 : 2} />
+                      <td colSpan={(canEdit || isAdmin) ? 3 : 2} />
                     </tr>
                   </tfoot>
                 )
@@ -349,6 +376,34 @@ export default function ExpensesPage() {
                 className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
               >
                 {updatingExpense ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm modal */}
+      {deletingId !== null && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-red-100 rounded-xl"><Trash2 size={18} className="text-red-600" /></div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Delete Expense?</h3>
+                <p className="text-sm text-gray-500 mt-0.5">This action cannot be undone.</p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setDeletingId(null)}
+                className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteExpense(deletingId)}
+                disabled={deleting}
+                className="flex-1 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
               </button>
             </div>
           </div>

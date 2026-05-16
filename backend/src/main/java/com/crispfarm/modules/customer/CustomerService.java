@@ -5,6 +5,7 @@ import com.crispfarm.common.exception.ApiException;
 import com.crispfarm.common.tenant.TenantContext;
 import com.crispfarm.modules.customer.dto.CustomerDto;
 import com.crispfarm.modules.customer.dto.SaveCustomerRequest;
+import com.crispfarm.modules.sales.SalesRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ public class CustomerService {
 
     private final CustomerRepository repo;
     private final CustomerTypeRepository customerTypeRepo;
+    private final SalesRepository salesRepo;
 
     public PageResponse<CustomerDto> list(String search, int page, int size) {
         return PageResponse.from(
@@ -47,6 +49,19 @@ public class CustomerService {
         c.setAddress(req.address());
         if (req.customerType() != null) c.setCustomerType(parseType(req.customerType()));
         return CustomerDto.from(repo.save(c));
+    }
+
+    public void delete(Long id) {
+        Long tenantId = TenantContext.get();
+        Customer c = repo.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> ApiException.notFound("Customer not found"));
+        long salesCount = salesRepo.countByCustomerIdAndTenantId(id, tenantId);
+        if (salesCount > 0) {
+            throw ApiException.badRequest(
+                "Cannot delete customer with existing sales records (" + salesCount + " sale(s)). " +
+                "Delete or reassign the sales first.");
+        }
+        repo.delete(c);
     }
 
     public Customer findOwned(Long id) {

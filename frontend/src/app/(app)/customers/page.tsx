@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, X, PlusCircle } from 'lucide-react'
+import { Plus, X, PlusCircle, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import type { ApiResponse, PageResponse, Customer, CustomerTypeDef } from '@/types'
@@ -28,6 +28,7 @@ export default function CustomersPage() {
   const [page, setPage] = useState(0)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -65,6 +66,18 @@ export default function CustomersPage() {
       closeForm()
     },
     onError: (e: any) => alert(e?.response?.data?.message ?? 'Failed to save'),
+  })
+
+  const { mutate: deleteCustomer, isPending: deleting } = useMutation({
+    mutationFn: (id: number) => api.delete(`/customers/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customers'] })
+      setDeletingId(null)
+    },
+    onError: (e: any) => {
+      alert(e?.response?.data?.message ?? 'Failed to delete customer')
+      setDeletingId(null)
+    },
   })
 
   const { mutate: createType, isPending: creatingType } = useMutation({
@@ -150,9 +163,20 @@ export default function CustomersPage() {
                     <td className="px-4 py-3 text-gray-600">{c.email ?? '—'}</td>
                     <td className="px-4 py-3 text-gray-500 max-w-xs truncate">{c.address ?? '—'}</td>
                     <td className="px-4 py-3">
-                      {canEdit && (
-                        <button onClick={() => openEdit(c)} className="text-xs text-brand-600 hover:underline">Edit</button>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {canEdit && (
+                          <button onClick={() => openEdit(c)} className="text-xs text-brand-600 hover:underline">Edit</button>
+                        )}
+                        {isAdmin && (
+                          <button
+                            onClick={() => setDeletingId(c.id)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            title="Delete customer"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -173,6 +197,34 @@ export default function CustomersPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Delete confirm modal */}
+      {deletingId !== null && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-red-100 rounded-xl"><Trash2 size={18} className="text-red-600" /></div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Delete Customer?</h3>
+                <p className="text-sm text-gray-500 mt-0.5">Customers with existing sales cannot be deleted.</p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setDeletingId(null)}
+                className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteCustomer(deletingId)}
+                disabled={deleting}
+                className="flex-1 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showForm && (

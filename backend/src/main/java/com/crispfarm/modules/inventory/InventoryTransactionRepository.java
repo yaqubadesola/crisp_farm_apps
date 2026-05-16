@@ -14,4 +14,6 @@ public interface InventoryTransactionRepository extends JpaRepository<InventoryT
     Page<InventoryTransaction> findByTenantAndItem(@Param("tid") Long tenantId,
                                                     @Param("itemId") Long itemId,
                                                     Pageable pageable);
+
+    long countByItemIdAndTenantId(Long itemId, Long tenantId);
 }

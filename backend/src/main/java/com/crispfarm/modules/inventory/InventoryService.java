@@ -99,6 +99,20 @@ public class InventoryService {
         return InventoryTransactionDto.from(txRepo.save(tx), item.getName(), item.getUnit());
     }
 
+    @Transactional
+    public void deleteItem(Long id) {
+        Long tid = TenantContext.get();
+        InventoryItem item = itemRepo.findByIdAndTenantId(id, tid)
+                .orElseThrow(() -> ApiException.notFound("Inventory item not found"));
+        long txCount = txRepo.countByItemIdAndTenantId(id, tid);
+        if (txCount > 0) {
+            throw ApiException.badRequest(
+                "Cannot delete item with existing transactions (" + txCount + " transaction(s)). " +
+                "This item has stock history that must be preserved.");
+        }
+        itemRepo.delete(item);
+    }
+
     public PageResponse<InventoryTransactionDto> listTransactions(Long itemId, int page, int size) {
         Long tid = TenantContext.get();
         return PageResponse.from(

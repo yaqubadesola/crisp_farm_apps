@@ -84,6 +84,14 @@ public class ExpenseService {
         return ExpenseDto.from(repo.save(expense));
     }
 
+    @Transactional
+    public void delete(Long id) {
+        Long tenantId = TenantContext.get();
+        Expense expense = repo.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> ApiException.notFound("Expense not found"));
+        repo.delete(expense);
+    }
+
     @Transactional(readOnly = true)
     public ExpenseSummaryDto summary(LocalDate from, LocalDate to) {
         Long tenantId = TenantContext.get();

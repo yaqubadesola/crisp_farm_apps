@@ -220,6 +220,22 @@ export interface ExpenseSummary {
   byCategory: Record<string, number>
 }
 
+// ── Crisis Management ─────────────────────────────────────────────────
+export type CrisisSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+
+export interface CrisisEvent {
+  id: number
+  eventDate: string
+  title: string
+  severity: CrisisSeverity
+  affectedCount: number | null
+  solution: string | null
+  description: string | null
+  resolved: boolean
+  recordedBy: string | null
+  createdAt: string
+}
+
 // ── Reports ───────────────────────────────────────────────────────────
 export interface DailySalesReport {
   date: string

@@ -22,6 +22,8 @@ public interface SalesRepository extends JpaRepository<Sale, Long> {
 
     Optional<Sale> findByIdAndTenantId(Long id, Long tenantId);
 
+    long countByCustomerIdAndTenantId(Long customerId, Long tenantId);
+
     @Query("SELECT s FROM Sale s WHERE s.tenantId = :tid AND s.invoiceStatus = 'UNPAID' ORDER BY s.saleDate DESC")
     java.util.List<Sale> findUnpaidByTenant(@Param("tid") Long tenantId);
 
