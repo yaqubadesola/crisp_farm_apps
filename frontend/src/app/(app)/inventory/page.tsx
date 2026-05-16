@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, X, AlertTriangle, Package, Pencil } from 'lucide-react'
+import { Plus, X, AlertTriangle, Package, Pencil, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import type { ApiResponse, PageResponse, InventoryItem, InventoryTransaction, InventoryCategory } from '@/types'
@@ -26,6 +26,7 @@ const TX_COLORS: Record<string, string> = {
 export default function InventoryPage() {
   const qc = useQueryClient()
   const { hasRole } = useAuth()
+  const isAdmin = hasRole('ADMIN')
   const canEdit = hasRole('ADMIN', 'FARM_MANAGER')
 
   const [tab, setTab] = useState<'items' | 'transactions'>('items')
@@ -42,6 +43,9 @@ export default function InventoryPage() {
   const [itemCategory, setItemCategory] = useState<InventoryCategory>('FEED')
   const [itemUnit, setItemUnit] = useState('kg')
   const [reorderLevel, setReorderLevel] = useState('')
+
+  // Delete item state
+  const [deletingItemId, setDeletingItemId] = useState<number | null>(null)
 
   // Edit item state
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
@@ -79,6 +83,18 @@ export default function InventoryPage() {
         .then(r => r.data.data)
     },
     enabled: tab === 'transactions',
+  })
+
+  const { mutate: deleteItem, isPending: deletingItem } = useMutation({
+    mutationFn: (id: number) => api.delete(`/inventory/items/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory-items'] })
+      setDeletingItemId(null)
+    },
+    onError: (e: any) => {
+      alert(e?.response?.data?.message ?? 'Failed to delete item')
+      setDeletingItemId(null)
+    },
   })
 
   const { mutate: updateItem, isPending: updatingItem } = useMutation({
@@ -205,12 +221,12 @@ export default function InventoryPage() {
                   <th className="px-4 py-3 font-medium text-right">In Stock</th>
                   <th className="px-4 py-3 font-medium text-right">Reorder At</th>
                   <th className="px-4 py-3 font-medium">Status</th>
-                  {canEdit && <th className="px-4 py-3 font-medium"></th>}
+                  {(canEdit || isAdmin) && <th className="px-4 py-3 font-medium"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {(!items || items.length === 0) && (
-                  <tr><td colSpan={canEdit ? 6 : 5} className="px-4 py-8 text-center text-gray-400">
+                  <tr><td colSpan={(canEdit || isAdmin) ? 6 : 5} className="px-4 py-8 text-center text-gray-400">
                     <Package size={24} className="mx-auto mb-2 opacity-30" />No inventory items
                   </td></tr>
                 )}
@@ -237,15 +253,28 @@ export default function InventoryPage() {
                         <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">OK</span>
                       )}
                     </td>
-                    {canEdit && (
+                    {(canEdit || isAdmin) && (
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => openEditItem(item)}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-                          title="Edit item"
-                        >
-                          <Pencil size={14} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          {canEdit && (
+                            <button
+                              onClick={() => openEditItem(item)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                              title="Edit item"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                          )}
+                          {isAdmin && (
+                            <button
+                              onClick={() => setDeletingItemId(item.id)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                              title="Delete item"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -307,6 +336,34 @@ export default function InventoryPage() {
             )}
           </>
         )
+      )}
+
+      {/* Delete item confirm modal */}
+      {deletingItemId !== null && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-red-100 rounded-xl"><Trash2 size={18} className="text-red-600" /></div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Delete Inventory Item?</h3>
+                <p className="text-sm text-gray-500 mt-0.5">Items with existing transactions cannot be deleted.</p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setDeletingItemId(null)}
+                className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteItem(deletingItemId)}
+                disabled={deletingItem}
+                className="flex-1 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+              >
+                {deletingItem ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Edit item modal */}

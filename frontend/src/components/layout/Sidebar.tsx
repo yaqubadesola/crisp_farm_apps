@@ -7,7 +7,7 @@ import { useAuth, type UserRole } from '@/lib/auth'
 import {
   LayoutDashboard, ShoppingCart, Package, Users, CreditCard,
   TrendingDown, RefreshCw, Wheat, DollarSign, BarChart3,
-  ClipboardList, Settings, LogOut, Menu, X,
+  ClipboardList, Settings, LogOut, Menu, X, ShieldAlert,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -29,6 +29,7 @@ const nav: NavItem[] = [
   { href: '/inventory',    label: 'Inventory',      icon: Wheat,         roles: ['ADMIN', 'FARM_MANAGER'] },
   { href: '/reports',      label: 'Reports',        icon: BarChart3,     roles: ['ADMIN', 'ACCOUNTANT', 'FARM_MANAGER'] },
   { href: '/pricing',      label: 'Pricing',        icon: DollarSign,    roles: ['ADMIN'] },
+  { href: '/crisis',       label: 'Crisis Events',  icon: ShieldAlert,   roles: ['ADMIN', 'FARM_MANAGER'] },
   { href: '/users',        label: 'Users',          icon: Settings,      roles: ['ADMIN'] },
 ]
 

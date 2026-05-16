@@ -49,4 +49,11 @@ public class SalesController {
     public ApiResponse<SaleDto> update(@PathVariable Long id, @RequestBody UpdateSaleRequest req) {
         return ApiResponse.success(salesService.update(id, req));
     }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasRole('ADMIN')")
+    public void delete(@PathVariable Long id) {
+        salesService.delete(id);
+    }
 }

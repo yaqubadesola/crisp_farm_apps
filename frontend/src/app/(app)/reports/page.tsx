@@ -27,8 +27,8 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string;
 
 export default function ReportsPage() {
   const today = format(new Date(), 'yyyy-MM-dd')
-  const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd')
-  const [from, setFrom] = useState(monthStart)
+  const yearStart = format(new Date(new Date().getFullYear(), 0, 1), 'yyyy-MM-dd')
+  const [from, setFrom] = useState(yearStart)
   const [to, setTo] = useState(today)
 
   const { data: rangeReport, isFetching } = useQuery({

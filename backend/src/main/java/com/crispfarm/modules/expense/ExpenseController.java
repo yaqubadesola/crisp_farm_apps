@@ -51,6 +51,13 @@ public class ExpenseController {
         return ApiResponse.success(expenseService.update(id, req));
     }
 
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasRole('ADMIN')")
+    public void delete(@PathVariable Long id) {
+        expenseService.delete(id);
+    }
+
     @GetMapping("/summary")
     @PreAuthorize("hasAnyRole('ADMIN','FARM_MANAGER','ACCOUNTANT')")
     public ApiResponse<ExpenseSummaryDto> summary(
