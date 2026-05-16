@@ -33,9 +33,10 @@ public class SalesController {
     public ApiResponse<PageResponse<SaleDto>> list(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.success(salesService.list(from, to, page, size));
+        return ApiResponse.success(salesService.list(from, to, status, page, size));
     }
 
     @GetMapping("/{id}")

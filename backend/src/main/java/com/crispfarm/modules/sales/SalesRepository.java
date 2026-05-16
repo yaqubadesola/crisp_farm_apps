@@ -14,10 +14,12 @@ public interface SalesRepository extends JpaRepository<Sale, Long> {
 
     @Query("SELECT s FROM Sale s WHERE s.tenantId = :tid " +
            "AND s.saleDate BETWEEN :from AND :to " +
+           "AND (:status IS NULL OR s.invoiceStatus = :status) " +
            "ORDER BY s.saleDate DESC, s.createdAt DESC")
     Page<Sale> findByTenantAndDateRange(@Param("tid") Long tenantId,
                                         @Param("from") LocalDate from,
                                         @Param("to") LocalDate to,
+                                        @Param("status") String status,
                                         Pageable pageable);
 
     Optional<Sale> findByIdAndTenantId(Long id, Long tenantId);

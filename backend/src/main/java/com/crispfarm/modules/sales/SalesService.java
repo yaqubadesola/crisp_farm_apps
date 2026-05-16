@@ -5,6 +5,7 @@ import com.crispfarm.common.exception.ApiException;
 import com.crispfarm.common.tenant.TenantContext;
 import com.crispfarm.modules.customer.Customer;
 import com.crispfarm.modules.customer.CustomerRepository;
+import com.crispfarm.modules.payment.PaymentRepository;
 import com.crispfarm.modules.pricing.PricingTierService;
 import com.crispfarm.modules.sales.dto.CreateSaleRequest;
 import com.crispfarm.modules.sales.dto.SaleDto;
@@ -29,6 +30,7 @@ public class SalesService {
     private final SalesRepository salesRepo;
     private final CustomerRepository customerRepo;
     private final PricingTierService pricingTierService;
+    private final PaymentRepository paymentRepo;
 
     @Transactional
     public SaleDto create(CreateSaleRequest req) {
@@ -78,13 +80,14 @@ public class SalesService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<SaleDto> list(LocalDate from, LocalDate to, int page, int size) {
+    public PageResponse<SaleDto> list(LocalDate from, LocalDate to, String status, int page, int size) {
         Long tenantId = TenantContext.get();
         Pageable pageable = PageRequest.of(page, size);
         LocalDate f = (from != null) ? from : LocalDate.of(2000, 1, 1);
         LocalDate t = (to != null) ? to : LocalDate.now();
-        Page<Sale> result = salesRepo.findByTenantAndDateRange(tenantId, f, t, pageable);
-        return PageResponse.from(result.map(s -> enrichSale(s, tenantId)));
+        String s = (status != null && !status.isBlank()) ? status.toUpperCase() : null;
+        Page<Sale> result = salesRepo.findByTenantAndDateRange(tenantId, f, t, s, pageable);
+        return PageResponse.from(result.map(sale -> enrichSale(sale, tenantId)));
     }
 
     @Transactional(readOnly = true)
@@ -136,6 +139,8 @@ public class SalesService {
         Long tenantId = TenantContext.get();
         Sale sale = salesRepo.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> ApiException.notFound("Sale not found"));
+        // Delete payments first — payments.sale_id has no CASCADE so it must be cleared manually
+        paymentRepo.deleteAll(paymentRepo.findBySaleIdAndTenantIdOrderByPaymentDateDesc(id, tenantId));
         salesRepo.delete(sale);
     }
 
