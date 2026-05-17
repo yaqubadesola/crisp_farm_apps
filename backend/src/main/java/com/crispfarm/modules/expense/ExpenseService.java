@@ -44,11 +44,11 @@ public class ExpenseService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<ExpenseDto> list(LocalDate from, LocalDate to, int page, int size) {
+    public PageResponse<ExpenseDto> list(LocalDate from, LocalDate to, Long cycleId, int page, int size) {
         LocalDate f = from != null ? from : LocalDate.of(2000, 1, 1);
         LocalDate t = to != null ? to : LocalDate.now();
         return PageResponse.from(
-                repo.findByTenantAndDateRange(TenantContext.get(), f, t, PageRequest.of(page, size))
+                repo.findByTenantAndDateRange(TenantContext.get(), f, t, cycleId, PageRequest.of(page, size))
                     .map(ExpenseDto::from)
         );
     }

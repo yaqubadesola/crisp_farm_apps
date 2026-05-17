@@ -3,6 +3,7 @@ package com.crispfarm.modules.sales;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -15,11 +16,13 @@ public interface SalesRepository extends JpaRepository<Sale, Long> {
     @Query("SELECT s FROM Sale s WHERE s.tenantId = :tid " +
            "AND s.saleDate BETWEEN :from AND :to " +
            "AND (:status IS NULL OR s.invoiceStatus = :status) " +
+           "AND (:cycleId IS NULL OR s.cycleId = :cycleId) " +
            "ORDER BY s.saleDate DESC, s.createdAt DESC")
     Page<Sale> findByTenantAndDateRange(@Param("tid") Long tenantId,
                                         @Param("from") LocalDate from,
                                         @Param("to") LocalDate to,
                                         @Param("status") String status,
+                                        @Param("cycleId") Long cycleId,
                                         Pageable pageable);
 
     Optional<Sale> findByIdAndTenantId(Long id, Long tenantId);
@@ -52,4 +55,26 @@ public interface SalesRepository extends JpaRepository<Sale, Long> {
 
     @Query("SELECT COUNT(s) FROM Sale s WHERE s.tenantId = :tid AND s.saleDate BETWEEN :from AND :to")
     Long countBetween(@Param("tid") Long tenantId, @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    @Query("SELECT COALESCE(SUM(s.totalPrice), 0) FROM Sale s WHERE s.tenantId = :tid AND s.cycleId = :cycleId AND s.saleDate BETWEEN :from AND :to")
+    BigDecimal sumRevenueByCycleAndDateRange(@Param("tid") Long tenantId, @Param("cycleId") Long cycleId, @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    @Query("SELECT COALESCE(SUM(s.totalQuantityKg), 0) FROM Sale s WHERE s.tenantId = :tid AND s.cycleId = :cycleId AND s.saleDate BETWEEN :from AND :to")
+    BigDecimal sumQtyByCycleAndDateRange(@Param("tid") Long tenantId, @Param("cycleId") Long cycleId, @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    @Query("SELECT COUNT(s) FROM Sale s WHERE s.tenantId = :tid AND s.cycleId = :cycleId AND s.saleDate BETWEEN :from AND :to")
+    Long countByCycleAndDateRange(@Param("tid") Long tenantId, @Param("cycleId") Long cycleId, @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    @Query("SELECT COALESCE(SUM(s.totalPrice), 0) FROM Sale s WHERE s.tenantId = :tid AND s.cycleId = :cycleId AND s.saleDate = :date")
+    BigDecimal sumRevenueByCycleAndDate(@Param("tid") Long tenantId, @Param("cycleId") Long cycleId, @Param("date") LocalDate date);
+
+    @Query("SELECT COALESCE(SUM(s.totalQuantityKg), 0) FROM Sale s WHERE s.tenantId = :tid AND s.cycleId = :cycleId AND s.saleDate = :date")
+    BigDecimal sumQtyByCycleAndDate(@Param("tid") Long tenantId, @Param("cycleId") Long cycleId, @Param("date") LocalDate date);
+
+    @Query("SELECT COUNT(s) FROM Sale s WHERE s.tenantId = :tid AND s.cycleId = :cycleId AND s.saleDate = :date")
+    Long countByCycleAndDate(@Param("tid") Long tenantId, @Param("cycleId") Long cycleId, @Param("date") LocalDate date);
+
+    @Modifying
+    @Query("UPDATE Sale s SET s.cycleId = :cycleId WHERE s.tenantId = :tid AND s.cycleId IS NULL")
+    int assignCycleToUnlinked(@Param("cycleId") Long cycleId, @Param("tid") Long tenantId);
 }

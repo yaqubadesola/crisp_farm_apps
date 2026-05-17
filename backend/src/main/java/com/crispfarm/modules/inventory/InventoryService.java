@@ -113,10 +113,10 @@ public class InventoryService {
         itemRepo.delete(item);
     }
 
-    public PageResponse<InventoryTransactionDto> listTransactions(Long itemId, int page, int size) {
+    public PageResponse<InventoryTransactionDto> listTransactions(Long itemId, Long cycleId, int page, int size) {
         Long tid = TenantContext.get();
         return PageResponse.from(
-                txRepo.findByTenantAndItem(tid, itemId, PageRequest.of(page, size))
+                txRepo.findByTenantAndItem(tid, itemId, cycleId, PageRequest.of(page, size))
                         .map(t -> {
                             InventoryItem item = itemRepo.findByIdAndTenantId(t.getItemId(), tid).orElse(null);
                             String name = item != null ? item.getName() : "Unknown";

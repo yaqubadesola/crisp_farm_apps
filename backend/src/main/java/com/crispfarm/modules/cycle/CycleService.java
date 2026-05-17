@@ -4,6 +4,7 @@ import com.crispfarm.common.exception.ApiException;
 import com.crispfarm.common.tenant.TenantContext;
 import com.crispfarm.modules.cycle.dto.*;
 import com.crispfarm.modules.expense.ExpenseRepository;
+import com.crispfarm.modules.inventory.InventoryTransactionRepository;
 import com.crispfarm.modules.pond.PondRepository;
 import com.crispfarm.modules.sales.SalesRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ public class CycleService {
     private final PondRepository pondRepo;
     private final SalesRepository salesRepo;
     private final ExpenseRepository expenseRepo;
+    private final InventoryTransactionRepository txRepo;
 
     public List<FarmCycleDto> listAll(String status) {
         Long tid = TenantContext.get();
@@ -133,6 +135,20 @@ public class CycleService {
                 revenue, expenses, netProfit, Math.round(roi * 100.0) / 100.0,
                 salesCount
         );
+    }
+
+    @Transactional
+    public BackfillResultDto backfillCycle(Long cycleId) {
+        Long tid = TenantContext.get();
+        FarmCycle cycle = cycleRepo.findByIdAndTenantId(cycleId, tid)
+                .orElseThrow(() -> ApiException.notFound("Cycle not found"));
+
+        int expenses  = expenseRepo.assignCycleToUnlinked(cycleId, tid);
+        int sales     = salesRepo.assignCycleToUnlinked(cycleId, tid);
+        int inventory = txRepo.assignCycleToUnlinked(cycleId, tid);
+
+        return new BackfillResultDto(cycleId, cycle.getName(), expenses, sales, inventory,
+                expenses + sales + inventory);
     }
 
     private FarmCycle findOwned(Long id) {

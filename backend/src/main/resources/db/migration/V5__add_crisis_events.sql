@@ -1,4 +1,4 @@
-CREATE TABLE crisis_events (
+CREATE TABLE IF NOT EXISTS crisis_events (
     id           BIGSERIAL PRIMARY KEY,
     tenant_id    BIGINT NOT NULL REFERENCES tenants(id),
     event_date   DATE NOT NULL,
@@ -12,5 +12,5 @@ CREATE TABLE crisis_events (
     recorded_by  VARCHAR(100),
     created_at   TIMESTAMP NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_crisis_events_tenant ON crisis_events(tenant_id);
-CREATE INDEX idx_crisis_events_date   ON crisis_events(tenant_id, event_date);
+CREATE INDEX IF NOT EXISTS idx_crisis_events_tenant ON crisis_events(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_crisis_events_date   ON crisis_events(tenant_id, event_date);

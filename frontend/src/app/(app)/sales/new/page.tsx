@@ -34,8 +34,8 @@ export default function NewSalePage() {
   })
 
   const { data: cycles } = useQuery({
-    queryKey: ['cycles', 'active-list'],
-    queryFn: () => api.get<ApiResponse<FarmCycle[]>>('/cycles?status=ACTIVE&size=50').then(r => r.data.data),
+    queryKey: ['cycles', 'all-list'],
+    queryFn: () => api.get<ApiResponse<FarmCycle[]>>('/cycles?size=100').then(r => r.data.data),
     retry: false,
   })
 
@@ -59,7 +59,7 @@ export default function NewSalePage() {
         customerId: selectedCustomer!.id,
         quantityKg: qty,
         paymentMethod,
-        cycleId: cycleId ? parseInt(cycleId) : null,
+        cycleId: parseInt(cycleId),
         notes: notes || null,
         pricingTierName: selectedTierName || null,
       }).then(r => r.data.data),
@@ -272,15 +272,15 @@ export default function NewSalePage() {
         )}
       </div>
 
-      {/* Cycle (optional) */}
+      {/* Cycle */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Farm Cycle <span className="text-gray-400">(optional)</span></label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Farm Cycle <span className="text-red-500">*</span></label>
         <select
           value={cycleId}
           onChange={e => setCycleId(e.target.value)}
           className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none bg-white"
         >
-          <option value="">— None —</option>
+          <option value="">— Select a cycle —</option>
           {(Array.isArray(cycles) ? cycles : (cycles as any)?.content ?? []).map((c: FarmCycle) => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
@@ -301,7 +301,7 @@ export default function NewSalePage() {
       {/* Submit */}
       <button
         onClick={() => createSale()}
-        disabled={isPending || !selectedCustomer || qty <= 0}
+        disabled={isPending || !selectedCustomer || qty <= 0 || !cycleId}
         className="w-full py-3 bg-brand-600 text-white rounded-lg font-semibold text-sm hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         {isPending ? 'Recording…' : `Record Sale${qty > 0 && tierPrice > 0 ? ` — ${fmt(estimatedTotal)}` : ''}`}

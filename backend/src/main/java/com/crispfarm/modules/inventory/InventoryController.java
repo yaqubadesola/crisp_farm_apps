@@ -64,8 +64,9 @@ public class InventoryController {
     @PreAuthorize("hasAnyRole('ADMIN','FARM_MANAGER')")
     public ApiResponse<PageResponse<InventoryTransactionDto>> listTransactions(
             @RequestParam(required = false) Long itemId,
+            @RequestParam(required = false) Long cycleId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.success(inventoryService.listTransactions(itemId, page, size));
+        return ApiResponse.success(inventoryService.listTransactions(itemId, cycleId, page, size));
     }
 }

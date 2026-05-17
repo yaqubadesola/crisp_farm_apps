@@ -12,5 +12,5 @@ public record CreateExpenseRequest(
         @NotNull @DecimalMin("0.01") BigDecimal amount,
         @NotNull LocalDate expenseDate,
         String description,
-        Long cycleId
+        @NotNull(message = "Cycle is required") Long cycleId
 ) {}

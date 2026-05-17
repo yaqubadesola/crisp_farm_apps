@@ -5,6 +5,7 @@ import com.crispfarm.common.exception.ApiException;
 import com.crispfarm.common.tenant.TenantContext;
 import com.crispfarm.modules.customer.Customer;
 import com.crispfarm.modules.customer.CustomerRepository;
+import com.crispfarm.modules.cycle.CycleRepository;
 import com.crispfarm.modules.payment.PaymentRepository;
 import com.crispfarm.modules.pricing.PricingTierService;
 import com.crispfarm.modules.sales.dto.CreateSaleRequest;
@@ -29,6 +30,7 @@ public class SalesService {
 
     private final SalesRepository salesRepo;
     private final CustomerRepository customerRepo;
+    private final CycleRepository cycleRepo;
     private final PricingTierService pricingTierService;
     private final PaymentRepository paymentRepo;
 
@@ -80,13 +82,13 @@ public class SalesService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<SaleDto> list(LocalDate from, LocalDate to, String status, int page, int size) {
+    public PageResponse<SaleDto> list(LocalDate from, LocalDate to, String status, Long cycleId, int page, int size) {
         Long tenantId = TenantContext.get();
         Pageable pageable = PageRequest.of(page, size);
         LocalDate f = (from != null) ? from : LocalDate.of(2000, 1, 1);
         LocalDate t = (to != null) ? to : LocalDate.now();
         String s = (status != null && !status.isBlank()) ? status.toUpperCase() : null;
-        Page<Sale> result = salesRepo.findByTenantAndDateRange(tenantId, f, t, s, pageable);
+        Page<Sale> result = salesRepo.findByTenantAndDateRange(tenantId, f, t, s, cycleId, pageable);
         return PageResponse.from(result.map(sale -> enrichSale(sale, tenantId)));
     }
 
@@ -149,6 +151,9 @@ public class SalesService {
                 .map(Customer::getName).orElse("Unknown");
         String customerType = customerRepo.findByIdAndTenantId(sale.getCustomerId(), tenantId)
                 .map(Customer::getCustomerType).orElse("");
-        return SaleDto.from(sale, customerName, customerType, null);
+        String cycleName = sale.getCycleId() != null
+                ? cycleRepo.findById(sale.getCycleId()).map(c -> c.getName()).orElse(null)
+                : null;
+        return SaleDto.from(sale, customerName, customerType, cycleName);
     }
 }
