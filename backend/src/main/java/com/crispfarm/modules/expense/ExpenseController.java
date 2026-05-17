@@ -34,9 +34,10 @@ public class ExpenseController {
     public ApiResponse<PageResponse<ExpenseDto>> list(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long cycleId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.success(expenseService.list(from, to, page, size));
+        return ApiResponse.success(expenseService.list(from, to, cycleId, page, size));
     }
 
     @GetMapping("/{id}")

@@ -50,15 +50,17 @@ export default function SalesHistoryPage() {
   const [from, setFrom] = useState(format(new Date(new Date().getFullYear(), 0, 1), 'yyyy-MM-dd'))
   const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [statusFilter, setStatusFilter] = useState('')
+  const [cycleFilter, setCycleFilter] = useState('')
   const [page, setPage] = useState(0)
   const [editState, setEditState] = useState<EditState | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['sales', from, to, statusFilter, page],
+    queryKey: ['sales', from, to, statusFilter, cycleFilter, page],
     queryFn: () => {
       const params = new URLSearchParams({ from, to, page: String(page), size: '20' })
       if (statusFilter) params.set('status', statusFilter)
+      if (cycleFilter) params.set('cycleId', cycleFilter)
       return api.get<ApiResponse<PageResponse<Sale>>>(`/sales?${params}`).then(r => r.data.data)
     },
   })
@@ -70,9 +72,8 @@ export default function SalesHistoryPage() {
   })
 
   const { data: cycles } = useQuery({
-    queryKey: ['cycles', 'active-list'],
-    queryFn: () => api.get<ApiResponse<FarmCycle[]>>('/cycles?status=ACTIVE&size=50').then(r => r.data.data),
-    enabled: isAdmin,
+    queryKey: ['cycles', 'all-list'],
+    queryFn: () => api.get<ApiResponse<FarmCycle[]>>('/cycles?size=100').then(r => r.data.data),
     retry: false,
   })
 
@@ -145,6 +146,17 @@ export default function SalesHistoryPage() {
           <option value="">All</option>
           {INVOICE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
+        <label className="text-gray-600 ml-2">Cycle</label>
+        <select
+          value={cycleFilter}
+          onChange={e => { setCycleFilter(e.target.value); setPage(0) }}
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+        >
+          <option value="">All Cycles</option>
+          {(Array.isArray(cycles) ? cycles : (cycles as any)?.content ?? []).map((c: FarmCycle) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
       </div>
 
       {isLoading ? (
@@ -159,6 +171,7 @@ export default function SalesHistoryPage() {
                   <th className="px-4 py-3 font-medium">Date</th>
                   <th className="px-4 py-3 font-medium">Customer</th>
                   <th className="px-4 py-3 font-medium">Type</th>
+                  <th className="px-4 py-3 font-medium">Cycle</th>
                   <th className="px-4 py-3 font-medium text-right">Qty (kg)</th>
                   <th className="px-4 py-3 font-medium text-right">Total</th>
                   <th className="px-4 py-3 font-medium">Payment</th>
@@ -168,7 +181,7 @@ export default function SalesHistoryPage() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {data?.content.length === 0 && (
-                  <tr><td colSpan={isAdmin ? 9 : 8} className="px-4 py-8 text-center text-gray-400">No sales in this period</td></tr>
+                  <tr><td colSpan={isAdmin ? 10 : 9} className="px-4 py-8 text-center text-gray-400">No sales in this period</td></tr>
                 )}
                 {data?.content.map(sale => (
                   <tr key={sale.id} className="hover:bg-gray-50 transition-colors">
@@ -179,6 +192,13 @@ export default function SalesHistoryPage() {
                       <span className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">
                         {sale.customerType}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {sale.cycleName ? (
+                        <span className="inline-block bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-medium">
+                          {sale.cycleName}
+                        </span>
+                      ) : <span className="text-gray-400">—</span>}
                     </td>
                     <td className="px-4 py-3 text-right">{Number(sale.totalQuantityKg).toFixed(3)}</td>
                     <td className="px-4 py-3 text-right font-semibold">{fmt(sale.totalPrice)}</td>
@@ -217,7 +237,7 @@ export default function SalesHistoryPage() {
                 return (
                   <tfoot>
                     <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold text-gray-800">
-                      <td className="px-4 py-3" colSpan={4}>
+                      <td className="px-4 py-3" colSpan={5}>
                         Page total ({data.content.length} records)
                       </td>
                       <td className="px-4 py-3 text-right">{pageQty.toFixed(3)} kg</td>
@@ -405,13 +425,15 @@ export default function SalesHistoryPage() {
 
               {/* Cycle */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Farm Cycle</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Farm Cycle <span className="text-red-500">*</span>
+                </label>
                 <select
                   value={editState.cycleId}
                   onChange={e => setEditState(s => s && { ...s, cycleId: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none bg-white"
                 >
-                  <option value="">— None —</option>
+                  <option value="">— Select a cycle —</option>
                   {(Array.isArray(cycles) ? cycles : (cycles as any)?.content ?? []).map((c: FarmCycle) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
@@ -439,7 +461,7 @@ export default function SalesHistoryPage() {
               </button>
               <button
                 onClick={() => updateSale(editState)}
-                disabled={saving}
+                disabled={saving || !editState.cycleId}
                 className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700 disabled:opacity-50"
               >
                 {saving ? 'Saving…' : 'Save Changes'}

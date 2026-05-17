@@ -6,7 +6,7 @@ import { format, subDays, startOfMonth, endOfMonth } from 'date-fns'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line } from 'recharts'
 import api from '@/lib/api'
 import { fmt } from '@/lib/utils'
-import type { ApiResponse, RangeReport, DailySalesReport } from '@/types'
+import type { ApiResponse, RangeReport, DailySalesReport, FarmCycle } from '@/types'
 
 const PRESETS = [
   { label: 'Today', from: () => format(new Date(), 'yyyy-MM-dd'), to: () => format(new Date(), 'yyyy-MM-dd') },
@@ -30,15 +30,30 @@ export default function ReportsPage() {
   const yearStart = format(new Date(new Date().getFullYear(), 0, 1), 'yyyy-MM-dd')
   const [from, setFrom] = useState(yearStart)
   const [to, setTo] = useState(today)
+  const [cycleFilter, setCycleFilter] = useState('')
+
+  const { data: cycles } = useQuery({
+    queryKey: ['cycles', 'all-list'],
+    queryFn: () => api.get<ApiResponse<FarmCycle[]>>('/cycles?size=100').then(r => r.data.data),
+    retry: false,
+  })
 
   const { data: rangeReport, isFetching } = useQuery({
-    queryKey: ['range-report', from, to],
-    queryFn: () => api.get<ApiResponse<RangeReport>>(`/reports/range?from=${from}&to=${to}`).then(r => r.data.data),
+    queryKey: ['range-report', from, to, cycleFilter],
+    queryFn: () => {
+      const params = new URLSearchParams({ from, to })
+      if (cycleFilter) params.set('cycleId', cycleFilter)
+      return api.get<ApiResponse<RangeReport>>(`/reports/range?${params}`).then(r => r.data.data)
+    },
   })
 
   const { data: breakdown } = useQuery({
-    queryKey: ['report-breakdown', from, to],
-    queryFn: () => api.get<ApiResponse<DailySalesReport[]>>(`/reports/breakdown?from=${from}&to=${to}`).then(r => r.data.data),
+    queryKey: ['report-breakdown', from, to, cycleFilter],
+    queryFn: () => {
+      const params = new URLSearchParams({ from, to })
+      if (cycleFilter) params.set('cycleId', cycleFilter)
+      return api.get<ApiResponse<DailySalesReport[]>>(`/reports/breakdown?${params}`).then(r => r.data.data)
+    },
   })
 
   const chartData = (breakdown ?? []).map(d => ({
@@ -75,6 +90,17 @@ export default function ReportsPage() {
         <label className="text-gray-600">To</label>
         <input type="date" value={to} onChange={e => setTo(e.target.value)}
           className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm" />
+        <label className="text-gray-600 ml-2">Cycle</label>
+        <select
+          value={cycleFilter}
+          onChange={e => setCycleFilter(e.target.value)}
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+        >
+          <option value="">All Cycles</option>
+          {(Array.isArray(cycles) ? cycles : (cycles as any)?.content ?? []).map((c: FarmCycle) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
         {isFetching && <span className="text-xs text-gray-400">Loading…</span>}
       </div>
 

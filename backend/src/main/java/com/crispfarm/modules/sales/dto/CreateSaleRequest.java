@@ -11,7 +11,7 @@ public record CreateSaleRequest(
         @NotNull(message = "Customer is required") Long customerId,
         @NotNull @DecimalMin("0.001") BigDecimal quantityKg,
         @NotBlank String paymentMethod,
-        Long cycleId,
+        @NotNull(message = "Cycle is required") Long cycleId,
         LocalDate dueDate,
         String notes,
         String pricingTierName

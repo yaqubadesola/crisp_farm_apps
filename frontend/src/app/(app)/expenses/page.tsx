@@ -7,7 +7,7 @@ import { Plus, X, Pencil, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
 import { fmt } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
-import type { ApiResponse, PageResponse, Expense, ExpenseCategory, ExpenseSummary } from '@/types'
+import type { ApiResponse, PageResponse, Expense, ExpenseCategory, ExpenseSummary, FarmCycle } from '@/types'
 
 const CATEGORIES: ExpenseCategory[] = ['FEED', 'MEDICATION', 'LABOR', 'LOGISTICS', 'SALARY', 'UTILITIES', 'OTHER']
 
@@ -41,6 +41,7 @@ export default function ExpensesPage() {
   const [from, setFrom] = useState(yearStart)
   const [to, setTo] = useState(today)
   const [categoryFilter, setCategoryFilter] = useState('')
+  const [cycleFilter, setCycleFilter] = useState('')
   const [page, setPage] = useState(0)
   const [showForm, setShowForm] = useState(false)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
@@ -51,17 +52,20 @@ export default function ExpensesPage() {
   const [amount, setAmount] = useState('')
   const [expenseDate, setExpenseDate] = useState(today)
   const [description, setDescription] = useState('')
+  const [cycleId, setCycleId] = useState('')
 
   // Edit form state
   const [editCategory, setEditCategory] = useState<ExpenseCategory>('FEED')
   const [editAmount, setEditAmount] = useState('')
   const [editDate, setEditDate] = useState(today)
   const [editDescription, setEditDescription] = useState('')
+  const [editCycleId, setEditCycleId] = useState('')
 
   const { data: expenses, isLoading } = useQuery({
-    queryKey: ['expenses', from, to, categoryFilter, page],
+    queryKey: ['expenses', from, to, categoryFilter, cycleFilter, page],
     queryFn: () => {
       const params = new URLSearchParams({ from, to, page: String(page), size: '20' })
+      if (cycleFilter) params.set('cycleId', cycleFilter)
       return api.get<ApiResponse<PageResponse<Expense>>>(`/expenses?${params}`)
         .then(r => r.data.data)
     },
@@ -74,6 +78,14 @@ export default function ExpensesPage() {
         .then(r => r.data.data),
   })
 
+  const { data: cycles } = useQuery({
+    queryKey: ['cycles', 'all-list'],
+    queryFn: () => api.get<ApiResponse<FarmCycle[]>>('/cycles?size=100').then(r => r.data.data),
+    retry: false,
+  })
+
+  const cycleMap = Object.fromEntries((Array.isArray(cycles) ? cycles : []).map(c => [c.id, c.name]))
+
   const { mutate: updateExpense, isPending: updatingExpense } = useMutation({
     mutationFn: (e: Expense) =>
       api.put(`/expenses/${e.id}`, {
@@ -81,6 +93,7 @@ export default function ExpensesPage() {
         amount: parseFloat(editAmount),
         expenseDate: editDate,
         description: editDescription || null,
+        cycleId: editCycleId ? parseInt(editCycleId) : null,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['expenses'] })
@@ -95,6 +108,7 @@ export default function ExpensesPage() {
     setEditAmount(String(Number(e.amount)))
     setEditDate(e.expenseDate)
     setEditDescription(e.description ?? '')
+    setEditCycleId(e.cycleId != null ? String(e.cycleId) : '')
   }
 
   const { mutate: deleteExpense, isPending: deleting } = useMutation({
@@ -116,7 +130,7 @@ export default function ExpensesPage() {
         amount: parseFloat(amount),
         expenseDate,
         description: description || null,
-        cycleId: null,
+        cycleId: cycleId ? parseInt(cycleId) : null,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['expenses'] })
@@ -125,6 +139,7 @@ export default function ExpensesPage() {
       setDescription('')
       setCategory('FEED')
       setExpenseDate(today)
+      setCycleId('')
     },
     onError: (err: any) => alert(err?.response?.data?.message ?? 'Failed to record expense'),
   })
@@ -168,6 +183,15 @@ export default function ExpensesPage() {
         >
           <option value="">All</option>
           {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <label className="text-gray-600 ml-2">Cycle</label>
+        <select
+          value={cycleFilter}
+          onChange={e => { setCycleFilter(e.target.value); setPage(0) }}
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+        >
+          <option value="">All Cycles</option>
+          {(cycles ?? []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
 
@@ -225,6 +249,7 @@ export default function ExpensesPage() {
                   <th className="px-4 py-3 font-medium">Date</th>
                   <th className="px-4 py-3 font-medium">Category</th>
                   <th className="px-4 py-3 font-medium text-right">Amount</th>
+                  <th className="px-4 py-3 font-medium">Cycle</th>
                   <th className="px-4 py-3 font-medium">Description</th>
                   <th className="px-4 py-3 font-medium">Recorded By</th>
                   {(canEdit || isAdmin) && <th className="px-4 py-3 font-medium"></th>}
@@ -232,7 +257,7 @@ export default function ExpensesPage() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {expenses?.content.length === 0 && (
-                  <tr><td colSpan={(canEdit || isAdmin) ? 6 : 5} className="px-4 py-8 text-center text-gray-400">No expenses in this period</td></tr>
+                  <tr><td colSpan={(canEdit || isAdmin) ? 7 : 6} className="px-4 py-8 text-center text-gray-400">No expenses in this period</td></tr>
                 )}
                 {(expenses?.content ?? [])
                   .filter(e => !categoryFilter || e.category === categoryFilter)
@@ -245,6 +270,13 @@ export default function ExpensesPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-red-700">{fmt(e.amount)}</td>
+                    <td className="px-4 py-3 text-xs">
+                      {e.cycleId ? (
+                        <span className="inline-block bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-medium">
+                          {cycleMap[e.cycleId] ?? `#${e.cycleId}`}
+                        </span>
+                      ) : <span className="text-gray-400">—</span>}
+                    </td>
                     <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{e.description ?? '—'}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{e.recordedBy}</td>
                     {(canEdit || isAdmin) && (
@@ -286,14 +318,14 @@ export default function ExpensesPage() {
                         Page total ({visibleRows.length} records)
                       </td>
                       <td className="px-4 py-3 text-right text-red-700">{fmt(pageTotal)}</td>
-                      <td colSpan={(canEdit || isAdmin) ? 3 : 2} />
+                      <td colSpan={(canEdit || isAdmin) ? 4 : 3} />
                     </tr>
                     <tr className="bg-red-50 font-semibold text-gray-800">
                       <td className="px-4 py-3" colSpan={2}>
                         Period total {categoryFilter ? `(${categoryFilter})` : ''}
                       </td>
                       <td className="px-4 py-3 text-right text-red-700">{fmt(summary?.totalAmount)}</td>
-                      <td colSpan={(canEdit || isAdmin) ? 3 : 2} />
+                      <td colSpan={(canEdit || isAdmin) ? 4 : 3} />
                     </tr>
                   </tfoot>
                 )
@@ -365,6 +397,20 @@ export default function ExpensesPage() {
               />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Farm Cycle <span className="text-red-500">*</span></label>
+              <select
+                value={editCycleId}
+                onChange={e => setEditCycleId(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+              >
+                <option value="">— Select a cycle —</option>
+                {(cycles ?? []).map(c => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.status})</option>
+                ))}
+              </select>
+            </div>
+
             <div className="flex gap-3 pt-1">
               <button onClick={() => setEditingExpense(null)}
                 className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
@@ -372,7 +418,7 @@ export default function ExpensesPage() {
               </button>
               <button
                 onClick={() => updateExpense(editingExpense)}
-                disabled={updatingExpense || !editAmount || parseFloat(editAmount) <= 0}
+                disabled={updatingExpense || !editAmount || parseFloat(editAmount) <= 0 || !editCycleId}
                 className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
               >
                 {updatingExpense ? 'Saving…' : 'Save Changes'}
@@ -461,6 +507,20 @@ export default function ExpensesPage() {
               />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Farm Cycle <span className="text-red-500">*</span></label>
+              <select
+                value={cycleId}
+                onChange={e => setCycleId(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+              >
+                <option value="">— Select a cycle —</option>
+                {(cycles ?? []).map(c => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.status})</option>
+                ))}
+              </select>
+            </div>
+
             <div className="flex gap-3 pt-1">
               <button onClick={() => setShowForm(false)}
                 className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
@@ -468,7 +528,7 @@ export default function ExpensesPage() {
               </button>
               <button
                 onClick={() => createExpense()}
-                disabled={isPending || !amount || parseFloat(amount) <= 0}
+                disabled={isPending || !amount || parseFloat(amount) <= 0 || !cycleId}
                 className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
               >
                 {isPending ? 'Saving…' : 'Save'}

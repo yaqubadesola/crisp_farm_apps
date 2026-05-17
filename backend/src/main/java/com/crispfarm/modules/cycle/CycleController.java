@@ -2,6 +2,7 @@ package com.crispfarm.modules.cycle;
 
 import com.crispfarm.common.dto.ApiResponse;
 import com.crispfarm.modules.cycle.dto.*;
+import com.crispfarm.modules.cycle.dto.BackfillResultDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -67,5 +68,15 @@ public class CycleController {
     @PreAuthorize("hasAnyRole('ADMIN','FARM_MANAGER','ACCOUNTANT')")
     public ApiResponse<CycleProfitDto> getProfit(@PathVariable Long id) {
         return ApiResponse.success(cycleService.getProfit(id));
+    }
+
+    /**
+     * Bulk-assigns all records (expenses, sales, inventory transactions) that have no
+     * cycle linked yet to the specified cycle. Admin only — one-time correction action.
+     */
+    @PostMapping("/{id}/backfill")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<BackfillResultDto> backfill(@PathVariable Long id) {
+        return ApiResponse.success(cycleService.backfillCycle(id));
     }
 }

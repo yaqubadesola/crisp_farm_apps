@@ -31,25 +31,39 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public RangeReportDto rangeReport(LocalDate from, LocalDate to) {
+    public RangeReportDto rangeReport(LocalDate from, LocalDate to, Long cycleId) {
         Long tid = TenantContext.get();
-        BigDecimal revenue = salesRepo.sumRevenueBetween(tid, from, to);
-        BigDecimal qty = salesRepo.sumQtyBetween(tid, from, to);
-        Long count = salesRepo.countBetween(tid, from, to);
-        BigDecimal expenses = expenseRepo.sumBetween(tid, from, to);
+        BigDecimal revenue = cycleId != null
+                ? salesRepo.sumRevenueByCycleAndDateRange(tid, cycleId, from, to)
+                : salesRepo.sumRevenueBetween(tid, from, to);
+        BigDecimal qty = cycleId != null
+                ? salesRepo.sumQtyByCycleAndDateRange(tid, cycleId, from, to)
+                : salesRepo.sumQtyBetween(tid, from, to);
+        Long count = cycleId != null
+                ? salesRepo.countByCycleAndDateRange(tid, cycleId, from, to)
+                : salesRepo.countBetween(tid, from, to);
+        BigDecimal expenses = cycleId != null
+                ? expenseRepo.sumByCycleAndDateRange(tid, cycleId, from, to)
+                : expenseRepo.sumBetween(tid, from, to);
         BigDecimal netProfit = revenue.subtract(expenses);
         return new RangeReportDto(from, to, count, qty, revenue, expenses, netProfit);
     }
 
     @Transactional(readOnly = true)
-    public List<DailySalesReportDto> dailyBreakdown(LocalDate from, LocalDate to) {
+    public List<DailySalesReportDto> dailyBreakdown(LocalDate from, LocalDate to, Long cycleId) {
         Long tid = TenantContext.get();
         List<DailySalesReportDto> result = new ArrayList<>();
         LocalDate cursor = from;
         while (!cursor.isAfter(to)) {
-            BigDecimal revenue = salesRepo.sumRevenueByDate(tid, cursor);
-            BigDecimal qty = salesRepo.sumQtyByDate(tid, cursor);
-            Long count = salesRepo.countByDate(tid, cursor);
+            BigDecimal revenue = cycleId != null
+                    ? salesRepo.sumRevenueByCycleAndDate(tid, cycleId, cursor)
+                    : salesRepo.sumRevenueByDate(tid, cursor);
+            BigDecimal qty = cycleId != null
+                    ? salesRepo.sumQtyByCycleAndDate(tid, cycleId, cursor)
+                    : salesRepo.sumQtyByDate(tid, cursor);
+            Long count = cycleId != null
+                    ? salesRepo.countByCycleAndDate(tid, cycleId, cursor)
+                    : salesRepo.countByDate(tid, cursor);
             if (count > 0) {
                 result.add(new DailySalesReportDto(cursor, count, qty, revenue));
             }

@@ -2,8 +2,8 @@
 #  CrispFarm — Monorepo .gitignore
 #  Covers: Spring Boot (Maven) · Next.js (Node) · Docker · IDE · OS
 # ═══════════════════════════════════════════════════════════════════════
-
-
+# ── Neon back up ────────────────────────────────────────────────
+neon_backup.dump
 # ── Environment & Secrets ────────────────────────────────────────────────
 .env
 .env.local

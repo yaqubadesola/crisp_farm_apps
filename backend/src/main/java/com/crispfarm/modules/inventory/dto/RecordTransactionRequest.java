@@ -13,6 +13,6 @@ public record RecordTransactionRequest(
         @NotNull @DecimalMin("0.001") BigDecimal quantity,
         LocalDate transactionDate,
         BigDecimal unitCost,
-        Long cycleId,
+        @NotNull(message = "Cycle is required") Long cycleId,
         String notes
 ) {}

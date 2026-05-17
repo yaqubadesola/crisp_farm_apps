@@ -30,15 +30,17 @@ public class ReportController {
     @PreAuthorize("hasAnyRole('ADMIN','FARM_MANAGER','ACCOUNTANT')")
     public ApiResponse<RangeReportDto> range(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return ApiResponse.success(reportService.rangeReport(from, to));
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long cycleId) {
+        return ApiResponse.success(reportService.rangeReport(from, to, cycleId));
     }
 
     @GetMapping("/breakdown")
     @PreAuthorize("hasAnyRole('ADMIN','FARM_MANAGER','ACCOUNTANT')")
     public ApiResponse<List<DailySalesReportDto>> breakdown(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return ApiResponse.success(reportService.dailyBreakdown(from, to));
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long cycleId) {
+        return ApiResponse.success(reportService.dailyBreakdown(from, to, cycleId));
     }
 }

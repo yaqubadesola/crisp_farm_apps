@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, X, AlertTriangle, Package, Pencil, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
 import { useAuth } from '@/lib/auth'
-import type { ApiResponse, PageResponse, InventoryItem, InventoryTransaction, InventoryCategory } from '@/types'
+import type { ApiResponse, PageResponse, InventoryItem, InventoryTransaction, InventoryCategory, FarmCycle } from '@/types'
 
 const CATEGORIES: InventoryCategory[] = ['FEED', 'MEDICATION', 'EQUIPMENT', 'OTHER']
 const TX_TYPES = ['PURCHASE', 'USAGE', 'ADJUSTMENT']
@@ -37,6 +37,7 @@ export default function InventoryPage() {
   // Filters
   const [categoryFilter, setCategoryFilter] = useState('')
   const [txItemFilter, setTxItemFilter] = useState('')
+  const [txCycleFilter, setTxCycleFilter] = useState('')
 
   // New item form
   const [itemName, setItemName] = useState('')
@@ -60,6 +61,7 @@ export default function InventoryPage() {
   const [txQty, setTxQty] = useState('')
   const [txUnitCost, setTxUnitCost] = useState('')
   const [txNotes, setTxNotes] = useState('')
+  const [txCycleId, setTxCycleId] = useState('')
 
   const openEditItem = (item: InventoryItem) => {
     setEditingItem(item)
@@ -74,11 +76,20 @@ export default function InventoryPage() {
     queryFn: () => api.get<ApiResponse<InventoryItem[]>>('/inventory/items').then(r => r.data.data),
   })
 
+  const { data: cycles } = useQuery({
+    queryKey: ['cycles', 'all-list'],
+    queryFn: () => api.get<ApiResponse<FarmCycle[]>>('/cycles?size=100').then(r => r.data.data),
+    retry: false,
+  })
+
+  const cycleMap = Object.fromEntries((Array.isArray(cycles) ? cycles : (cycles as any)?.content ?? []).map((c: FarmCycle) => [c.id, c.name]))
+
   const { data: transactions, isLoading: loadingTx } = useQuery({
-    queryKey: ['inventory-tx', txItemFilter, txPage],
+    queryKey: ['inventory-tx', txItemFilter, txCycleFilter, txPage],
     queryFn: () => {
       const params = new URLSearchParams({ page: String(txPage), size: '20' })
       if (txItemFilter) params.set('itemId', txItemFilter)
+      if (txCycleFilter) params.set('cycleId', txCycleFilter)
       return api.get<ApiResponse<PageResponse<InventoryTransaction>>>(`/inventory/transactions?${params}`)
         .then(r => r.data.data)
     },
@@ -131,12 +142,13 @@ export default function InventoryPage() {
       quantity: parseFloat(txQty),
       unitCost: txUnitCost ? parseFloat(txUnitCost) : null,
       notes: txNotes || null,
+      cycleId: parseInt(txCycleId),
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['inventory-items'] })
       qc.invalidateQueries({ queryKey: ['inventory-tx'] })
       setShowTxForm(false)
-      setTxItemId(''); setTxQty(''); setTxUnitCost(''); setTxNotes(''); setTxType('PURCHASE')
+      setTxItemId(''); setTxQty(''); setTxUnitCost(''); setTxNotes(''); setTxType('PURCHASE'); setTxCycleId('')
     },
     onError: (e: any) => alert(e?.response?.data?.message ?? 'Failed'),
   })
@@ -196,6 +208,17 @@ export default function InventoryPage() {
           >
             <option value="">All items</option>
             {items?.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+          </select>
+          <label className="text-gray-600 ml-2">Cycle</label>
+          <select
+            value={txCycleFilter}
+            onChange={e => { setTxCycleFilter(e.target.value); setTxPage(0) }}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+          >
+            <option value="">All Cycles</option>
+            {(Array.isArray(cycles) ? cycles : (cycles as any)?.content ?? []).map((c: FarmCycle) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
           </select>
         </div>
       )}
@@ -295,6 +318,7 @@ export default function InventoryPage() {
                     <th className="px-4 py-3 font-medium">Date</th>
                     <th className="px-4 py-3 font-medium">Item</th>
                     <th className="px-4 py-3 font-medium">Type</th>
+                    <th className="px-4 py-3 font-medium">Cycle</th>
                     <th className="px-4 py-3 font-medium text-right">Quantity</th>
                     <th className="px-4 py-3 font-medium text-right">Unit Cost</th>
                     <th className="px-4 py-3 font-medium">Notes</th>
@@ -303,7 +327,7 @@ export default function InventoryPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {transactions?.content.length === 0 && (
-                    <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">No transactions</td></tr>
+                    <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">No transactions</td></tr>
                   )}
                   {transactions?.content.map(t => (
                     <tr key={t.id} className="hover:bg-gray-50">
@@ -313,6 +337,13 @@ export default function InventoryPage() {
                         <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${TX_COLORS[t.transactionType] ?? ''}`}>
                           {t.transactionType}
                         </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {t.cycleId && cycleMap[t.cycleId] ? (
+                          <span className="inline-block bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-medium">
+                            {cycleMap[t.cycleId]}
+                          </span>
+                        ) : <span className="text-gray-400">—</span>}
                       </td>
                       <td className="px-4 py-3 text-right">{Number(t.quantity).toFixed(2)} {t.unit}</td>
                       <td className="px-4 py-3 text-right text-gray-600">
@@ -505,9 +536,22 @@ export default function InventoryPage() {
               <input value={txNotes} onChange={e => setTxNotes(e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500" />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Farm Cycle <span className="text-red-500">*</span></label>
+              <select
+                value={txCycleId}
+                onChange={e => setTxCycleId(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+              >
+                <option value="">— Select a cycle —</option>
+                {(Array.isArray(cycles) ? cycles : (cycles as any)?.content ?? []).map((c: FarmCycle) => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.status})</option>
+                ))}
+              </select>
+            </div>
             <div className="flex gap-3">
               <button onClick={() => setShowTxForm(false)} className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-              <button onClick={() => recordTx()} disabled={recordingTx || !txItemId || !txQty}
+              <button onClick={() => recordTx()} disabled={recordingTx || !txItemId || !txQty || !txCycleId}
                 className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
                 {recordingTx ? 'Saving…' : 'Save'}
               </button>

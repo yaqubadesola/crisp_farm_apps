@@ -119,6 +119,15 @@ export interface CycleProfit {
   totalSalesCount: number
 }
 
+export interface BackfillResult {
+  cycleId: number
+  cycleName: string
+  expensesUpdated: number
+  salesUpdated: number
+  inventoryTransactionsUpdated: number
+  totalUpdated: number
+}
+
 // ── Sales ─────────────────────────────────────────────────────────────
 export interface Sale {
   id: number
