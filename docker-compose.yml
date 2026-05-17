@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: farm_user
       POSTGRES_PASSWORD: farm_pass
     ports:
-      - "5433:5432"
+      - "${DB_HOST_PORT:-5432}:5432"
     volumes:
       - farm_db_data:/var/lib/postgresql/data
     healthcheck:
